@@ -58,6 +58,7 @@ TOPICS=(linux sandbox security apparmor bubblewrap network-namespace mitmproxy a
 #   audit       -> "Dependency audit (cargo deny + cargo audit)"
 #   secret-scan -> "Secret scan (gitleaks, full history)"
 #   cla         -> "cla" (cla.yml job has no name: field, so ID == check name)
+#   hygiene     -> "hygiene" (pr-hygiene.yml job name == job ID)
 # If the ci.yml job `name:` fields are ever removed, replace these strings
 # with the bare job IDs (lint, test, coverage, audit, secret-scan).
 REQUIRED_CHECKS=(
@@ -67,6 +68,7 @@ REQUIRED_CHECKS=(
   "Dependency audit (cargo deny + cargo audit)"
   "Secret scan (gitleaks, full history)"
   "cla"
+  "hygiene"
 )
 
 # ---------------------------------------------------------------------------
