@@ -3,7 +3,7 @@ name = "pycentric-cordon"
 version = "1.0.0"
 edition = "2024"
 rust-version = "1.89"
-description = "Lightweight Blacklist Sandbox and L3-L7 Network Inspection Pipeline for AI Agents and Untrusted Software"
+description = "Cordon: zero-unsafe Rust Linux execution sandbox with a reproducible Cordonfile engine and L3-L7 network inspection (netns, AppArmor, bubblewrap, L7 egress policy, PCAP). AGPL-3.0-only."
 # Open core under AGPL-3.0-only (see LICENSE and NOTICE.md).
 # PyCentric-branded distribution packages are excluded works (LICENSE-PYCENTRIC.md).
 license = "AGPL-3.0-only"

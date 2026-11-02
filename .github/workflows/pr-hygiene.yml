@@ -1,0 +1,44 @@
+# PyCentric Cordon pull request hygiene gate.
+#
+# Dependency-light gate intended to become a REQUIRED status check: the single
+# job is named exactly `hygiene` so it can be pinned in branch protection.
+# Runs the constitutional typography gate, the CLA signing phrase sync gate,
+# and the public export hygiene scan (stray tracked artifacts + gitleaks).
+#
+# gitleaks is installed the same way as .github/workflows/ci.yml (go install),
+# so both workflows share one install convention. scripts/export-public.sh
+# --check-only skips the secret scan silently if gitleaks is not on PATH, so
+# the PATH step below is mandatory for the scan to actually run.
+name: pr-hygiene
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    name: hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: export-public.sh --check-only runs gitleaks in git
+          # mode over the repository history (same as ci.yml secret-scan).
+          fetch-depth: 0
+
+      - name: Typography gate (em-dash / en-dash)
+        run: bash scripts/check-emdash.sh
+
+      - name: CLA signing phrase sync gate
+        run: bash scripts/check-cla-sync.sh
+
+      - name: Install gitleaks (mirrors ci.yml)
+        run: |
+          go install github.com/gitleaks/gitleaks/v8@latest
+          echo "$(go env GOPATH)/bin" >> "${GITHUB_PATH}"
+
+      - name: Public export hygiene (stray artifacts + secret scan)
+        run: bash scripts/export-public.sh --check-only

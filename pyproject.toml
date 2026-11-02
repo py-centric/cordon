@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "pycentric-cordon"
 version = "1.0.0"
-description = "Cordon: Universal Lightweight Blacklist Sandbox & L3/L4/L7 Network Inspection Pipeline for Any Software, Untrusted Code, Builds, and AI Agents"
+description = "Cordon: zero-unsafe Rust Linux execution sandbox with a reproducible Cordonfile engine and L3-L7 network inspection (netns, AppArmor, bubblewrap, L7 egress policy, PCAP). AGPL-3.0-only."
 readme = "README.md"
 requires-python = ">=3.12"
 # Open core under AGPL-3.0-only (see LICENSE and NOTICE.md).

@@ -1,0 +1,8 @@
+# PyCentric maintainer review required for every change.
+# Update this file when a PyCentric maintainers team exists.
+* @iampycentric
+
+# Security-sensitive paths: always require maintainer review.
+/.github/ @iampycentric
+/packaging/ @iampycentric
+/deploy/ @iampycentric

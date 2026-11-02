@@ -18,7 +18,8 @@
 #   3. Do NOT protect `cla-signatures`.
 #
 # NOTE: upstream is archived (frozen releases); v2.6.1 is pinned for supply
-# chain stability. SHA-pin the commit when the repository policy requires it.
+# chain stability and SHA-pinned to ca4a40a7d1004f18d9960b404b97e5f30a505a08
+# (lightweight tag v2.6.1 resolved via gh api, 2026-11-02).
 
 name: CLA Assistant
 
@@ -28,6 +29,11 @@ on:
   pull_request_target:
     types: [opened, closed, synchronize]
 
+# Least privilege, verified against the upstream README at the pinned SHA
+# (contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08):
+# contents: write is required to push signature commits to the `cla-signatures`
+# branch (same-repo store; only 'read' if signatures were in a remote repo),
+# and actions/pull-requests/statuses: write match the documented set exactly.
 permissions:
   actions: write
   contents: write
@@ -43,7 +49,8 @@ jobs:
       github.event.comment.body == 'I have read the CLA Document (Version 1.1) and I hereby sign the CLA'
     steps:
       - name: CLA Assistant
-        uses: contributor-assistant/github-action@v2.6.1
+        # v2.6.1, SHA-pinned per supply chain policy (tag resolved 2026-11-02).
+        uses: contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08 # v2.6.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}

@@ -4,9 +4,9 @@
 > **Open core model in one line:** the engine is AGPL-3.0-only; supported enterprise packages and internal governance docs are proprietary.
 > **Open core licensing.** The Cordon engine is free and open source software under the **GNU Affero General Public License v3 only** (`AGPL-3.0-only`, see [`LICENSE`](LICENSE)). Internal governance/commercial/legal documents, the PyCentric `pc` orchestrator integration, and PyCentric-branded distribution packages (`pycentric-cordon` `.deb`/`.rpm`/tarball/wheel/Flatpak builds) remain proprietary to PyCentric (Pty) Ltd and are **not** covered by the AGPL grant. See [`NOTICE.md`](NOTICE.md) for the full scope map and [`LICENSE-PYCENTRIC.md`](LICENSE-PYCENTRIC.md) for the proprietary terms. "PyCentric", "Cordon", and `pycentric-cordon` are trade marks of PyCentric (Pty) Ltd; no trade mark rights are granted.
 
-**Security-tool evaluators:** run `cordon doctor` (11-point host attestation report; machine-readable via `cordon --json doctor` or `GET /api/v1/doctor`) and read the [Security Threat Model & Disclosure Policy (`SECURITY.md`)](SECURITY.md).
+**Security-tool evaluators:** Cordon blocks pre-sandbox interpreter hijacking, unsafe root/`$HOME` read-write mounts, in-workspace `.git` hook tampering, and secret or mutating-verb egress to package registries (details in Key Security Invariants below). Run `cordon doctor` (11-point host attestation report; machine-readable via `cordon --json doctor` or `GET /api/v1/doctor`) and read the [Security Threat Model & Disclosure Policy (`SECURITY.md`)](SECURITY.md).
 
-**Universal Linux Execution Sandbox, Reproducible `Cordonfile` Engine & L3-L7 Network Inspection Control Plane**  
+**Cordon: zero-unsafe Rust Linux execution sandbox with a reproducible Cordonfile engine and L3-L7 network inspection (netns, AppArmor, bubblewrap, L7 egress policy, PCAP). AGPL-3.0-only.**  
 *Engineered and Governed by PyCentric (`ADR-L0-SEC-02` | [Operations & Workload Guide](docs/OPERATIONS_AND_WORKLOAD_GUIDE.md))*
 
 ---

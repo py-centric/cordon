@@ -1,0 +1,106 @@
+# PyCentric Cordon release pipeline.
+#
+# MUST BE EXERCISED WITH A THROWAWAY TEST TAG (for example v0.0.1-test.1) BEFORE
+# THE FIRST PRODUCTION v1.0.0 TAG IS PUSHED. Delete the test release and tag
+# after the dry run.
+#
+# Builds the redistributable artifacts with `task package:all`
+# (scripts/package-dist.sh all):
+#   - dist/pycentric-cordon-<version>-linux-x86_64.tar.gz
+#   - dist/pycentric-cordon_<version>_amd64.deb
+#   - dist/SHA256SUMS
+# then publishes a GitHub Release via the preinstalled gh CLI (no third-party
+# release action). Packaging runs offline, so dependencies are prefetched with
+# `cargo fetch --locked` exactly like .github/workflows/ci.yml.
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing v* tag to release (required when dispatching from a branch)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Task runner (go-task)
+        run: |
+          go install github.com/go-task/task/v3/cmd/task@latest
+          echo "$(go env GOPATH)/bin" >> "${GITHUB_PATH}"
+
+      - name: Fetch Rust dependencies (offline packaging prerequisite)
+        run: cargo fetch --locked
+
+      - name: Build release artifacts (task package:all)
+        run: task package:all
+
+      - name: Verify dist artifacts and generate SHA256SUMS
+        run: |
+          shopt -s nullglob
+          # .deb and .rpm are skipped automatically if not produced; .rpm is
+          # never built by scripts/package-dist.sh today (guard is forward
+          # compatible). dist/ must never be empty.
+          artifacts=(dist/*.tar.gz dist/*.deb dist/*.rpm)
+          if [ "${#artifacts[@]}" -eq 0 ]; then
+            echo "FAIL: task package:all produced no artifacts in dist/" >&2
+            exit 1
+          fi
+          echo "Packaged artifacts:"
+          printf '  %s\n' "${artifacts[@]}"
+          ( cd dist && sha256sum -- *.tar.gz *.deb *.rpm > SHA256SUMS )
+          echo "SHA256SUMS:"
+          cat dist/SHA256SUMS
+
+      - name: Resolve release tag
+        id: tag
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            tag="${GITHUB_REF_NAME}"
+          elif [ -n "${INPUT_TAG:-}" ]; then
+            tag="${INPUT_TAG}"
+          else
+            echo "FAIL: workflow_dispatch requires the 'tag' input naming an existing v* tag" >&2
+            exit 1
+          fi
+          case "${tag}" in
+            v*) ;;
+            *)
+              echo "FAIL: release tag must match v* (got: ${tag})" >&2
+              exit 1
+              ;;
+          esac
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "Releasing tag: ${tag}"
+
+      - name: Create GitHub Release (gh CLI)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          shopt -s nullglob
+          assets=(dist/SHA256SUMS dist/*.tar.gz dist/*.deb dist/*.rpm)
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "FAIL: no dist assets to upload" >&2
+            exit 1
+          fi
+          gh release create "${RELEASE_TAG}" \
+            --verify-tag \
+            --title "Cordon ${RELEASE_TAG}" \
+            --generate-notes \
+            "${assets[@]}"

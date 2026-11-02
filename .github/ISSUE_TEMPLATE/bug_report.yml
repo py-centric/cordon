@@ -1,0 +1,73 @@
+name: Bug report
+description: Report a reproducible defect in the Cordon engine, gates, Cordonfile handling, or plugins.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a bug.
+
+        **Security vulnerabilities must NOT be reported here.** Report them
+        PRIVATELY to security@pycentric.co.za per SECURITY.md. Never include
+        secrets, credentials, or security-sensitive exploit details for
+        unpatched issues in a public issue.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Minimal steps to reproduce the behavior.
+      placeholder: |
+        1. Run 'cordon run ...'
+        2. Apply sandbox config '...'
+        3. Observe the failure
+    validations:
+      required: true
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Expected vs actual behavior
+      description: What you expected to happen, and what actually happened.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Kernel version, distro, cordon version, and the output of `cordon doctor`.
+      value: |
+        - Kernel version:
+        - Distro:
+        - Cordon version:
+        - `cordon doctor` output:
+      render: shell
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: |
+        **Redaction reminder:** redact host paths, usernames, hostnames, and any
+        secrets from the `cordon doctor` output before submitting.
+  - type: textarea
+    id: sandbox-config
+    attributes:
+      label: Sandbox config (Cordonfile, redacted)
+      description: The relevant Cordonfile or sandbox configuration, with secrets and host-specific values redacted.
+      render: toml
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (redacted)
+      description: Relevant log excerpts. Redact secrets and credentials. Do not include security-sensitive exploit details for unpatched issues; report those privately per SECURITY.md.
+      render: shell
+    validations:
+      required: false
