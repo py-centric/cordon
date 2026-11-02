@@ -1,0 +1,94 @@
+# PyCentric Cordon CI (pycentric-cordon v1.0.0)
+# Governing ADR: docs/adr/ADR-L0-SEC-02.md
+#
+# Jobs: lint, test, coverage, dependency audit (best-effort), secret scan.
+# Triggers: every push and pull request.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint (rustfmt + clippy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: cargo fmt --check
+        run: cargo fmt --check
+      - name: cargo clippy (-D warnings)
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Docs hygiene (em-dash + bundle-lint)
+        run: |
+          bash scripts/check-emdash.sh
+          bash scripts/bundle-lint.sh
+
+  test:
+    name: Test (Rust engine + Python reference stack)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: astral-sh/setup-uv@v5
+      - name: Fetch Rust dependencies
+        run: cargo fetch --locked
+      - name: Rust test suite (offline)
+        run: cargo test --offline
+      # Equivalent to `uvx pytest tests/test_cordon.py` with the pyproject
+      # runtime dependencies supplied to the ephemeral uvx environment.
+      - name: Python reference stack tests
+        run: uvx --with pytest --with pydantic --with typer --with rich pytest tests/test_cordon.py
+
+  coverage:
+    name: Coverage (cargo llvm-cov)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Fetch Rust dependencies
+        run: cargo fetch --locked
+      - name: cargo llvm-cov (line coverage gate)
+        # Gate is the LOWER of 90 and the currently-measured coverage.
+        # Measured 2026-10-31: 80.31% lines (cargo llvm-cov --summary-only).
+        # Coverage floor rises to 90 after the REPL/TUI test additions land.
+        run: cargo llvm-cov --offline --summary-only --fail-under-lines 80
+
+  audit:
+    name: Dependency audit (cargo deny + cargo audit)
+    runs-on: ubuntu-latest
+    # Blocking job: deny.toml is committed (advisories/licenses/bans/sources
+    # policy). New vulnerabilities or yanked crates fail the build.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny,cargo-audit
+      - name: cargo deny check
+        run: cargo deny check
+      - name: cargo audit
+        run: cargo audit
+
+  secret-scan:
+    name: Secret scan (gitleaks, full history)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        run: go install github.com/gitleaks/gitleaks/v8@latest
+      - name: gitleaks detect --full-history
+        run: |
+          bash scripts/export-public.sh --write-gitleaks-config > "${RUNNER_TEMP}/gitleaks-allowlist.toml"
+          gitleaks detect --full-history --redact --config "${RUNNER_TEMP}/gitleaks-allowlist.toml"

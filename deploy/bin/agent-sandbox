@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# =============================================================================
+# PyCentric AI Agent Sandbox Host Entrypoint: /usr/local/bin/agent-sandbox
+# Governing Spec: ADR-L0-SEC-02 (Section 2.1 Layered Execution Topology)
+# Strictly complies with the PyCentric Zero Unicode Em-Dash Rule.
+#
+# Execution Flow:
+#   Host Shell -> ip netns (agent-net) -> AppArmor (/usr/local/bin/agent-shell)
+#   -> Bubblewrap Namespace -> AI Agent Process (opencode / antigravity / pi)
+#
+# CWE-426 hardening:
+#   - PATH is pinned to system directories; every privileged binary is invoked
+#     by ABSOLUTE path (/usr/sbin/ip, /usr/bin/setpriv, /usr/bin/env).
+#   - Privilege elevation goes through `sudo` for THIS root-owned script only
+#     (see deploy/bin/cordon.sudoers); never `sudo <relative command>`.
+#   - The privileged execution chain is launched under `/usr/bin/env -i` with a
+#     minimal explicit environment: HOME/USER/LOGNAME resolved via getent for
+#     the invoking user, plus LANG, TERM, and a fixed safe PATH. Caller
+#     environment (PATH, SSH_TTY, LD_PRELOAD, ...) is never preserved.
+# =============================================================================
+set -euo pipefail
+
+# Pin PATH for every code path (defense against untrusted search paths).
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+SAFE_PATH="$PATH"
+
+# Absolute binary paths (never PATH-resolved at exec time).
+IP_BIN="/usr/sbin/ip"
+SETPRIV_BIN="/usr/bin/setpriv"
+GETENT_BIN="/usr/bin/getent"
+SUDO_BIN="/usr/bin/sudo"
+ENV_BIN="/usr/bin/env"
+
+SELF_BIN="$(readlink -f "${BASH_SOURCE[0]}")"
+NETNS_NAME="${PYCENTRIC_SANDBOX_NETNS:-agent-net}"
+AGENT_SHELL_BIN="${PYCENTRIC_AGENT_SHELL_BIN:-/usr/local/bin/agent-shell}"
+
+# -----------------------------------------------------------------------------
+# Input validation (fail closed before any privilege boundary is crossed)
+# -----------------------------------------------------------------------------
+if [[ ! "$NETNS_NAME" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    echo "[agent-sandbox] ERROR: Invalid network namespace name '${NETNS_NAME}'." >&2
+    exit 2
+fi
+
+if [[ "$AGENT_SHELL_BIN" != /* ]]; then
+    echo "[agent-sandbox] ERROR: Confined shell wrapper path must be absolute." >&2
+    exit 2
+fi
+
+if [[ ! -x "$AGENT_SHELL_BIN" ]]; then
+    echo "[agent-sandbox] ERROR: Confined shell wrapper '${AGENT_SHELL_BIN}' not found or not executable." >&2
+    exit 1
+fi
+
+# Resolve the invoking user's passwd entry (uid, gid, home) via getent.
+INVOKING_USER="${CORDON_INVOKING_USER:-${SUDO_USER:-$(id -un)}}"
+INVOKING_ENTRY="$("$GETENT_BIN" passwd "$INVOKING_USER" || true)"
+if [[ -z "$INVOKING_ENTRY" ]]; then
+    echo "[agent-sandbox] ERROR: Cannot resolve passwd entry for '${INVOKING_USER}'." >&2
+    exit 1
+fi
+IFS=: read -r _ _ INVOKING_UID INVOKING_GID _ INVOKING_HOME _ <<<"$INVOKING_ENTRY"
+if [[ -z "$INVOKING_UID" || -z "$INVOKING_GID" || -z "$INVOKING_HOME" ]]; then
+    echo "[agent-sandbox] ERROR: Incomplete passwd entry for '${INVOKING_USER}'." >&2
+    exit 1
+fi
+
+# Verify that the network namespace exists (FR-4.1)
+if ! "$IP_BIN" netns list | grep -qw "^${NETNS_NAME}"; then
+    echo "[agent-sandbox] ERROR: Network namespace '${NETNS_NAME}' is not active." >&2
+    echo "[agent-sandbox] Run 'sudo deploy/net/setup-sandbox-net.sh up' first." >&2
+    exit 1
+fi
+
+# -----------------------------------------------------------------------------
+# Privilege boundary
+# -----------------------------------------------------------------------------
+if [[ "$(id -u)" -ne 0 ]]; then
+    # Re-exec THIS root-owned script through sudo (restricted to absolute-path
+    # commands in deploy/bin/cordon.sudoers). Caller environment is discarded by
+    # sudo's env_reset; the root branch rebuilds a minimal explicit environment.
+    exec "$SUDO_BIN" "$SELF_BIN" "$@"
+fi
+
+# Enter Gate 1 (ip netns agent-net), drop privileges back to the invoking user,
+# and exec Gate 2 (/usr/local/bin/agent-shell confined by AppArmor).
+# /usr/bin/env -i guarantees the workload only receives the explicit minimal
+# environment below (CWE-426 / CWE-214 mitigation).
+exec "$ENV_BIN" -i \
+    "HOME=$INVOKING_HOME" \
+    "USER=$INVOKING_USER" \
+    "LOGNAME=$INVOKING_USER" \
+    "LANG=${LANG:-C.UTF-8}" \
+    "TERM=${TERM:-dumb}" \
+    "PATH=$SAFE_PATH" \
+    "$IP_BIN" netns exec "$NETNS_NAME" \
+    "$SETPRIV_BIN" --reuid="$INVOKING_UID" --regid="$INVOKING_GID" --init-groups \
+    "$AGENT_SHELL_BIN" "$@"

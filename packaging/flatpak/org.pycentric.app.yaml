@@ -1,0 +1,20 @@
+app-id: org.pycentric.app
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: cordon
+finish-args:
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+modules:
+  - name: pycentric-cordon
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 target/release/cordon /app/bin/cordon
+      - install -Dm755 deploy/bin/agent-sandbox /app/bin/agent-sandbox
+      - install -Dm755 deploy/bin/agent-shell /app/bin/agent-shell
+    sources:
+      - type: dir
+        path: ../..

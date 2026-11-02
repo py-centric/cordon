@@ -1,0 +1,189 @@
+#!/usr/bin/env bash
+# =============================================================================
+# PyCentric AI Agent Sandbox Inner Wrapper: /usr/local/bin/agent-shell
+# Governing Spec: ADR-L0-SEC-02 (FR-1.1..FR-2.2, FR-5.2, EC-01..EC-05)
+# Strictly complies with the PyCentric Zero Unicode Em-Dash Rule.
+#
+# Execution Gate 2 & 3:
+#   - Confined by AppArmor profile: /etc/apparmor.d/usr.local.bin.agent-shell
+#   - Constructs Bubblewrap (bwrap) mount & PID namespace
+#   - Overlays combined host + mitmproxy CA bundle onto system trust stores
+#   - Protects $REAL_PWD/.git as read-only by default (EC-01)
+# =============================================================================
+set -euo pipefail
+
+# CWE-426: pin PATH to system directories so no caller-controlled directory can
+# shadow realpath/cat/cp/mkdir/chmod/readlink during sandbox construction.
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# -----------------------------------------------------------------------------
+# CLI Options & Supplementary Binary Masking (FR-1.5, EC-01, EC-02)
+# -----------------------------------------------------------------------------
+PROTECT_GIT=1
+BUILD_MODE=0
+ declare -a MASKED_BINS=()
+declare -a AGENT_CMD=()
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --allow-git-write)
+            PROTECT_GIT=0
+            shift
+            ;;
+        --build-mode)
+            BUILD_MODE=1
+            shift
+            ;;
+        --mask-bin)
+            if [[ $# -lt 2 ]]; then
+                echo "[agent-shell] ERROR: --mask-bin requires a binary path argument." >&2
+                exit 2
+            fi
+            MASKED_BINS+=("$2")
+            shift 2
+            ;;
+        --)
+            shift
+            AGENT_CMD=("$@")
+            break
+            ;;
+        *)
+            AGENT_CMD=("$@")
+            break
+            ;;
+    esac
+done
+
+if [[ ${#AGENT_CMD[@]} -eq 0 ]]; then
+    AGENT_CMD=("/bin/bash" "--norc" "-i")
+fi
+
+# -----------------------------------------------------------------------------
+# EC-05: Canonicalize Symlinked Paths via realpath (FR-1.2)
+# Ensures Bubblewrap bind mounts align 1:1 with AppArmor kernel path resolution.
+# -----------------------------------------------------------------------------
+REAL_PWD="$(realpath "$PWD")"
+REAL_HOME="$(realpath "$HOME")"
+
+if [[ "$REAL_PWD" == "/" || "$REAL_PWD" == "$REAL_HOME" ]]; then
+    echo "[agent-shell] ERROR: Refusing to mount root (/) or entire \$HOME ($REAL_HOME) read-write." >&2
+    echo "[agent-shell] Navigate into a specific project repository directory first." >&2
+    exit 1
+fi
+
+# -----------------------------------------------------------------------------
+# FR-1.4 & FR-5.2: Combined System + mitmproxy CA Bundle Generation
+# -----------------------------------------------------------------------------
+MITM_DIR="${REAL_HOME}/.mitmproxy"
+MITM_CA_CERT="${MITM_DIR}/mitmproxy-ca-cert.pem"
+COMBINED_CA_BUNDLE="${MITM_DIR}/combined-ca-bundle.pem"
+
+HOST_CA_CANDIDATES=(
+    "/etc/ssl/certs/ca-certificates.crt"
+    "/etc/pki/tls/certs/ca-bundle.crt"
+    "/etc/ssl/ca-bundle.pem"
+)
+
+HOST_CA_SRC=""
+for candidate in "${HOST_CA_CANDIDATES[@]}"; do
+    if [[ -f "$candidate" ]]; then
+        HOST_CA_SRC="$candidate"
+        break
+    fi
+done
+
+if [[ -z "$HOST_CA_SRC" ]]; then
+    echo "[agent-shell] ERROR: Could not locate host CA bundle in /etc/ssl or /etc/pki." >&2
+    exit 1
+fi
+
+mkdir -p "$MITM_DIR"
+if [[ -f "$MITM_CA_CERT" ]]; then
+    if [[ ! -f "$COMBINED_CA_BUNDLE" ]] || [[ "$MITM_CA_CERT" -nt "$COMBINED_CA_BUNDLE" ]] || [[ "$HOST_CA_SRC" -nt "$COMBINED_CA_BUNDLE" ]]; then
+        cat "$HOST_CA_SRC" "$MITM_CA_CERT" > "$COMBINED_CA_BUNDLE"
+        chmod 0644 "$COMBINED_CA_BUNDLE"
+    fi
+else
+    # Fallback to host CA bundle if mitmproxy CA has not been initialized yet
+    cp -f "$HOST_CA_SRC" "$COMBINED_CA_BUNDLE"
+    chmod 0644 "$COMBINED_CA_BUNDLE"
+fi
+
+# -----------------------------------------------------------------------------
+# Construct Bubblewrap (bwrap) Isolation Arguments (FR-1.1..FR-2.2)
+# -----------------------------------------------------------------------------
+declare -a BWRAP_ARGS=(
+    # FR-1.1: Read-only base host pass-through
+    --ro-bind / /
+    # Device & virtual kernel filesystems
+    --dev /dev
+    # FR-2.1: PID namespace isolation & fresh /proc mount
+    --unshare-pid
+    --proc /proc
+    # FR-1.3: Isolated ephemeral RAM-backed /tmp and /var/tmp
+    --tmpfs /tmp
+    --tmpfs /var/tmp
+    --tmpfs /dev/shm
+    # FR-1.2: Dynamic workspace read-write binding
+    --bind "$REAL_PWD" "$REAL_PWD"
+    --chdir "$REAL_PWD"
+    # FR-2.2: Lifecycle coupling (SIGKILL children if parent terminal exits) & setsid() isolation
+    --die-with-parent
+    --new-session
+)
+
+# EC-01: Protect repository .git and .husky metadata as read-only unless --allow-git-write
+if [[ "$PROTECT_GIT" -eq 1 && -d "${REAL_PWD}/.git" ]]; then
+    BWRAP_ARGS+=(--ro-bind "${REAL_PWD}/.git" "${REAL_PWD}/.git")
+fi
+if [[ "$PROTECT_GIT" -eq 1 && -d "${REAL_PWD}/.husky" ]]; then
+    BWRAP_ARGS+=(--ro-bind "${REAL_PWD}/.husky" "${REAL_PWD}/.husky")
+fi
+
+# FR-1.4 & EC-04: Overlay combined CA bundle over distribution trust stores
+for target_ca in "${HOST_CA_CANDIDATES[@]}"; do
+    if [[ -e "$target_ca" ]]; then
+        real_ca="$(readlink -f "$target_ca" 2>/dev/null || true)"
+        if [[ -n "$real_ca" && -f "$real_ca" ]]; then
+            BWRAP_ARGS+=(--ro-bind "$COMBINED_CA_BUNDLE" "$real_ca")
+        fi
+    fi
+done
+
+# Provide isolated resolv.conf pointing to the DNAT-intercepted resolver (EC-07)
+if [[ -f "/etc/netns/agent-net/resolv.conf" ]]; then
+    real_resolv="$(readlink -f /etc/resolv.conf 2>/dev/null || echo /etc/resolv.conf)"
+    BWRAP_ARGS+=(--ro-bind "/etc/netns/agent-net/resolv.conf" "$real_resolv")
+fi
+
+# FR-1.5: Supplementary binary masking via /dev/null bind-mounts
+for masked_bin in "${MASKED_BINS[@]}"; do
+    if [[ -e "$masked_bin" ]]; then
+        real_bin="$(readlink -f "$masked_bin" 2>/dev/null || true)"
+        if [[ -n "$real_bin" && -f "$real_bin" ]]; then
+            BWRAP_ARGS+=(--ro-bind /dev/null "$real_bin")
+        fi
+    fi
+done
+
+# EC-02: Optional project-local build scratch directory for cargo/pip/node-gyp
+if [[ "$BUILD_MODE" -eq 1 ]]; then
+    BUILD_SCRATCH="${REAL_PWD}/.agent-build-tmp"
+    mkdir -p "$BUILD_SCRATCH"
+    BWRAP_ARGS+=(--setenv TMPDIR "$BUILD_SCRATCH")
+fi
+
+# FR-5.2: Runtime Environment Trust Injection for Python, Node.js, Rust, Curl, Go
+BWRAP_ARGS+=(
+    --setenv SSL_CERT_FILE "$HOST_CA_SRC"
+    --setenv REQUESTS_CA_BUNDLE "$HOST_CA_SRC"
+    --setenv CURL_CA_BUNDLE "$HOST_CA_SRC"
+    --setenv NODE_EXTRA_CA_CERTS "$HOST_CA_SRC"
+    --setenv AWS_CA_BUNDLE "$HOST_CA_SRC"
+    --setenv GIT_SSL_CAINFO "$HOST_CA_SRC"
+    --setenv PYCENTRIC_SANDBOX_ACTIVE "1"
+    --setenv PYCENTRIC_SANDBOX_WORKSPACE "$REAL_PWD"
+    --setenv PS1 "[agent-sandbox:\W]\$ "
+)
+
+exec /usr/bin/bwrap "${BWRAP_ARGS[@]}" -- "${AGENT_CMD[@]}"

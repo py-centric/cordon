@@ -1,0 +1,33 @@
+# =============================================================================
+# PyCentric Cordon: least-privilege sudo policy for the sandbox launcher.
+# Governing Spec: ADR-L0-SEC-02 (Section 2.1 Layered Execution Topology)
+# Strictly complies with the PyCentric Zero Unicode Em-Dash Rule.
+#
+# Install (as root):
+#   visudo -cf deploy/bin/cordon.sudoers
+#   install -o root -g root -m 0440 deploy/bin/cordon.sudoers /etc/sudoers.d/cordon
+#
+# Rationale (CWE-426 untrusted search path / root elevation of privilege):
+#   - ONLY the root-owned launcher scripts are permitted, matched by ABSOLUTE
+#     path. A bare command path in sudoers matches any arguments, so the
+#     sandbox workload command is passed as arguments to agent-sandbox and
+#     never through a shell.
+#   - secure_path strips caller-controlled PATH from every sudo execution.
+#   - agent-sandbox re-execs itself under sudo and then launches the privileged
+#     chain through /usr/bin/env -i with a minimal explicit environment
+#     (HOME/USER/LOGNAME resolved via getent, plus LANG/TERM and a fixed PATH).
+#   - Do NOT grant sudoers entries for /usr/bin/env, /usr/sbin/ip, or
+#     /usr/bin/setpriv directly: any of those can be steered into arbitrary
+#     root command execution.
+# =============================================================================
+
+Defaults env_reset
+Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# Members of group "cordon" may launch the sandbox without a password.
+# Add users with: usermod -aG cordon <user>
+%cordon ALL=(root) NOPASSWD: /usr/local/bin/agent-sandbox
+%cordon ALL=(root) NOPASSWD: /usr/bin/agent-sandbox
+
+# Optional: allow the same group to provision/tear down Gate 1 networking.
+# %cordon ALL=(root) NOPASSWD: /usr/lib/cordon/setup-sandbox-net.sh

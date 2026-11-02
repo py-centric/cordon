@@ -1,0 +1,25 @@
+# Cordon Plugin Manifest: cordon-fish
+# Inspired by tmux plugin manager (tpm) and the Fish interactive shell.
+# Activate via: set -g @plugin 'cordon-plugins/cordon-fish'
+
+[plugin]
+name = "cordon-fish"
+repo_id = "cordon-plugins/cordon-fish"
+version = "0.2.0"
+description = "Fish-style interactive shell UX: live ANSI syntax highlighting, inline history ghost autosuggestions (Right/Ctrl-F), abbreviated prompt_pwd (~/P/cordon), and Tab completion."
+
+[features]
+fish_autosuggest = true
+syntax_highlighting = true
+abbreviate_cwd = true
+powerline_prompt = false
+startup_banner = false
+
+[groups]
+default_command_groups = ["coreutils", "shell-builtins"]
+default_directory_groups = []
+
+[aliases]
+c = "clear"
+h = "history"
+g = "groups"

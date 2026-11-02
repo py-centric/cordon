@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+if command -v go-task >/dev/null 2>&1; then
+    exec go-task "$@"
+else
+    echo "Error: go-task is not installed" >&2
+    exit 1
+fi

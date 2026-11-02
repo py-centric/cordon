@@ -1,0 +1,168 @@
+# Last Modified: 2026-10-15
+# PyCentric AI Agent Sandbox AppArmor Profile (ADR-L0-SEC-02)
+# Install to: /etc/apparmor.d/usr.local.bin.agent-shell
+# Load via:   sudo apparmor_parser -r -W /etc/apparmor.d/usr.local.bin.agent-shell
+# Strictly complies with the PyCentric Zero Unicode Em-Dash Rule.
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+profile agent_shell /usr/local/bin/agent-shell flags=(attach_disconnected,mediate_deleted) {
+  include <abstractions/base>
+  include <abstractions/nameservice>
+  include <abstractions/python>
+  include <abstractions/ssl_certs>
+
+  # ---------------------------------------------------------------------------
+  # FR-3.4 & EC-06: Unprivileged User Namespace & Mount Setup for Bubblewrap
+  # Ubuntu 24.04+ (kernel.apparmor_restrict_unprivileged_userns = 1) requires
+  # explicit userns and mount mediation. /usr/bin/bwrap runs under 'ix'
+  # (inherit execute) so the child shell and AI agent inherit every deny rule.
+  # ---------------------------------------------------------------------------
+  userns,
+  mount,
+  remount,
+  umount,
+  pivot_root,
+
+  # Allow initial capabilities required by bwrap namespace initialization only
+  capability sys_chroot,
+  capability setpcap,
+  capability setuid,
+  capability setgid,
+  capability dac_override,
+
+  # FR-3.4: Explicit Privilege & Capability Containment
+  deny capability net_admin,
+  deny capability net_raw,
+  deny capability sys_admin,
+  deny capability sys_module,
+  deny capability sys_rawio,
+  deny capability sys_ptrace,
+  deny capability sys_boot,
+  deny capability mac_admin,
+  deny capability mac_override,
+  deny ptrace,
+  deny signal peer=unconfined,
+
+  # ---------------------------------------------------------------------------
+  # Broad Baseline Read/Execute & Workspace Read-Write (Blacklist Model)
+  # Bubblewrap enforces read-only root (--ro-bind / /) and read-write $REAL_PWD
+  # at the VFS mount layer; AppArmor enforces immutable kernel MAC denials below.
+  # ---------------------------------------------------------------------------
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+  network unix stream,
+  network unix dgram,
+  network netlink raw,
+
+  / r,
+  /** r,
+  /{usr,bin,lib,lib64,sbin}/** mr,
+  /usr/bin/bwrap ix,
+  /usr/local/bin/agent-shell rix,
+  /{usr/,}bin/{bash,sh,zsh,dash,env} rix,
+  /usr/** rix,
+  /opt/** rix,
+  @{HOME}/.cargo/bin/** rix,
+  @{HOME}/.local/bin/** rix,
+
+  # Allow read-write-lock-mmap inside user home & workspace (subject to explicit denies below)
+  # Note: VFS read-only bind mount (--ro-bind / /) blocks writes outside $REAL_PWD and /tmp.
+  @{HOME}/** rwk,
+  /mnt/** rwk,
+  /media/** rwk,
+  /srv/** rwk,
+  /tmp/** rwkl,
+  /var/tmp/** rwkl,
+  /dev/shm/** rwkl,
+  /dev/{null,zero,full,random,urandom,tty,pts/*,ptmx} rw,
+  /proc/** rw,
+  /sys/fs/cgroup/** r,
+
+  # EC-02: Allow execution of project-local build helpers inside $PWD
+  @{HOME}/**/node_modules/.bin/** rix,
+  @{HOME}/**/target/** rix,
+  @{HOME}/**/.venv/bin/** rix,
+
+  # ---------------------------------------------------------------------------
+  # FR-3.1: Blacklisted Executable Enforcement (Kernel-Level deny ... x)
+  # Blocks destructive file utilities, raw network tools, and privilege escalation.
+  # ---------------------------------------------------------------------------
+  deny /{usr/,}bin/rm x,
+  deny /{usr/,}bin/shred x,
+  deny /{usr/,}bin/curl x,
+  deny /{usr/,}bin/wget x,
+  deny /{usr/,}bin/nc x,
+  deny /{usr/,}bin/netcat x,
+  deny /{usr/,}bin/ncat x,
+  deny /{usr/,}bin/socat x,
+  deny /{usr/,}bin/ssh x,
+  deny /{usr/,}bin/scp x,
+  deny /{usr/,}bin/sftp x,
+  deny /{usr/,}bin/sudo x,
+  deny /{usr/,}bin/su x,
+  deny /{usr/,}bin/pkexec x,
+  deny /{usr/,}bin/chage x,
+  deny /{usr/,}bin/passwd x,
+  deny /{usr/,}sbin/iptables* x,
+  deny /{usr/,}sbin/nft x,
+  deny /{usr/,}sbin/ip x,
+  deny /{usr/,}sbin/apparmor_parser x,
+
+  # ---------------------------------------------------------------------------
+  # FR-3.2: No-Exec Enforcement on Writable Temp/Cache Paths (Defeats BYOB)
+  # Prevents copying /usr/bin/rm or downloading static busybox into /tmp and executing.
+  # ---------------------------------------------------------------------------
+  deny /tmp/** x,
+  deny /var/tmp/** x,
+  deny /dev/shm/** x,
+  deny /run/user/** x,
+
+  # ---------------------------------------------------------------------------
+  # FR-3.3: Sensitive Credential Path Protection (deny ... rwlkmx)
+  # Blocks all read, write, lock, link, mmap, and exec regardless of VFS mount state.
+  # ---------------------------------------------------------------------------
+  deny @{HOME}/.ssh/ rwlkmx,
+  deny @{HOME}/.ssh/** rwlkmx,
+  deny @{HOME}/.gnupg/ rwlkmx,
+  deny @{HOME}/.gnupg/** rwlkmx,
+  deny @{HOME}/.aws/ rwlkmx,
+  deny @{HOME}/.aws/** rwlkmx,
+  deny @{HOME}/.config/gcloud/ rwlkmx,
+  deny @{HOME}/.config/gcloud/** rwlkmx,
+  deny @{HOME}/.kube/ rwlkmx,
+  deny @{HOME}/.kube/** rwlkmx,
+  deny @{HOME}/.mitmproxy/mitmproxy-ca.pem rwlkmx,
+  deny @{HOME}/.mitmproxy/mitmproxy-ca-cert.p12 rwlkmx,
+  deny @{HOME}/.netrc rwlkmx,
+  deny @{HOME}/.docker/config.json rwlkmx,
+  deny @{HOME}/.pypirc rwlkmx,
+  deny @{HOME}/.npmrc rwlkmx,
+
+  # ---------------------------------------------------------------------------
+  # CH-03: Unix Socket Host-Service Isolation (systemd, D-Bus, keyring, Docker)
+  # Bind mounts do not block connect() on Unix sockets; deny all access so the
+  # sandboxed workload cannot reach host daemons (privilege escalation / RCE).
+  # ---------------------------------------------------------------------------
+  deny /run/user/**/systemd/** rwlkmx,
+  deny /run/user/**/bus rwlkmx,
+  deny /run/user/**/keyring/** rwlkmx,
+  deny /run/user/**/gcr/** rwlkmx,
+  deny /run/user/**/gnupg/** rwlkmx,
+  deny /run/dbus/** rwlkmx,
+  deny /run/docker.sock rwlkmx,
+  deny /var/run/docker.sock rwlkmx,
+
+  # ---------------------------------------------------------------------------
+  # FR-3.5: Self-Tampering Prevention
+  # ---------------------------------------------------------------------------
+  deny /usr/local/bin/agent-shell wkl,
+  deny /usr/local/bin/agent-sandbox wkl,
+  deny /etc/apparmor* wkl,
+  deny /etc/apparmor.d/** rwlkmx,
+  deny /sys/kernel/security/apparmor/** wkl,
+}

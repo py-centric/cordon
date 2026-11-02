@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${1:-}" == "configure" ]]; then
+    # Dedicated system user for the headless L7 policy engine (cordon-l7.service).
+    if ! getent group cordon >/dev/null 2>&1; then
+        groupadd --system cordon
+    fi
+    if ! getent passwd cordon >/dev/null 2>&1; then
+        useradd --system --gid cordon --home-dir /var/lib/cordon --no-create-home \
+            --shell /usr/sbin/nologin cordon
+    fi
+
+    # Least-privilege sudo policy for the sandbox launcher (CWE-426).
+    if [[ -f /usr/lib/cordon/cordon.sudoers ]] && command -v visudo >/dev/null 2>&1; then
+        if visudo -cf /usr/lib/cordon/cordon.sudoers >/dev/null 2>&1; then
+            install -o root -g root -m 0440 /usr/lib/cordon/cordon.sudoers /etc/sudoers.d/cordon
+        else
+            echo "[cordon] WARNING: cordon.sudoers failed visudo validation; not installed." >&2
+        fi
+    fi
+
+    if command -v apparmor_parser >/dev/null 2>&1 && [[ -f /etc/apparmor.d/usr.local.bin.agent-shell ]]; then
+        apparmor_parser -r -W /etc/apparmor.d/usr.local.bin.agent-shell || true
+    fi
+    if command -v systemctl >/dev/null 2>&1 && [[ -d /run/systemd/system ]]; then
+        systemctl daemon-reload || true
+    fi
+fi
+
+exit 0

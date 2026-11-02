@@ -1,0 +1,51 @@
+[package]
+name = "pycentric-cordon"
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.89"
+description = "Lightweight Blacklist Sandbox and L3-L7 Network Inspection Pipeline for AI Agents and Untrusted Software"
+# Open core under AGPL-3.0-only (see LICENSE and NOTICE.md).
+# PyCentric-branded distribution packages are excluded works (LICENSE-PYCENTRIC.md).
+license = "AGPL-3.0-only"
+authors = ["PyCentric <engineering@pycentric.co.za>"]
+publish = false
+
+[[bin]]
+name = "cordon"
+path = "src/main.rs"
+
+[lib]
+name = "cordon"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1.0"
+axum = "0.8"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4.6", features = ["derive"] }
+clap_complete = "4.6"
+crossterm = "0.28"
+ratatui = "0.29"
+regex = "1.12"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+tokio = { version = "1.50", features = ["full"] }
+tracing = "0.1"
+uuid = { version = "1.18", features = ["v4", "serde"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "deny"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+doc_markdown = "allow"
+struct_excessive_bools = "allow"
+too_many_lines = "allow"

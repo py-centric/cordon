@@ -1,0 +1,43 @@
+#!/usr/bin/env -S cordon run -f
+# Reproducible Cordon Environment for Antigravity Agentic Coding Assistant
+# Governing ADR: ADR-L0-SEC-02
+# Usage:
+#   ./configs/Cordonfile.antigravity
+#   cordon run -f configs/Cordonfile.antigravity -w /path/to/repo -- antigravity
+FROM ai-agent
+NAME antigravity-agent
+DESCRIPTION Reproducible 5-gate sandbox for Google DeepMind Antigravity coding assistant
+WORKDIR .
+
+# Pre-populated command & directory groups + explicit host tool passthrough (bat, ripgrep)
+ALLOW_GROUP coreutils shell-builtins search-tools vcs-git
+ALLOW_BIN bat rg fd jq
+MOUNT_GROUP xdg-config agent-state
+PLUGIN cordon-fish cordon-hud
+
+# Read-only toolchain & plugin mounts
+MOUNT /usr:ro
+MOUNT /lib:ro
+MOUNT /lib64:ro
+MOUNT /bin:ro
+MOUNT ~/.cargo/bin:ro
+MOUNT ~/.local/bin:ro
+MOUNT ~/.gemini/config:ro
+MOUNT ~/.gemini/antigravity/mcp:ro
+
+# Writable Antigravity brain, artifacts & scratchpad
+MOUNT ~/.gemini/antigravity/brain:rw
+MOUNT ~/.cache:rw
+
+# Mask container-escape and lateral movement binaries
+MASK /usr/bin/docker /usr/bin/podman /usr/bin/virsh /usr/bin/ssh /usr/bin/scp /usr/bin/rsync /usr/bin/nc /usr/bin/ncat /usr/bin/socat
+
+# Mask credential directories inside $HOME
+MASK_DIR ~/.ssh ~/.aws ~/.gnupg ~/.kube ~/.config/gcloud ~/.docker
+
+ALLOW_DOMAIN generativelanguage.googleapis.com aiplatform.googleapis.com api.anthropic.com api.openai.com api.github.com crates.io static.crates.io pypi.org files.pythonhosted.org
+DENY_DOMAIN pastebin.com transfer.sh webhook.site ngrok.io
+
+ENV ANTIGRAVITY_SANDBOX=cordon
+ENV PAGER=cat
+CMD ["bash", "--norc"]

@@ -1,0 +1,45 @@
+#!/usr/bin/env -S cordon run -f
+# Reproducible Cordon Environment for OpenCode CLI Agent
+# Governing ADR: ADR-L0-SEC-02
+# Usage:
+#   ./configs/Cordonfile.opencode
+#   cordon run -f configs/Cordonfile.opencode -w /path/to/repo -- opencode
+FROM ai-agent
+NAME opencode-agent
+DESCRIPTION Reproducible 5-gate sandbox for OpenCode CLI autonomous coding agent
+WORKDIR .
+
+# Pre-populated command & directory groups + explicit host tool passthrough (bat, ripgrep)
+ALLOW_GROUP coreutils shell-builtins search-tools vcs-git
+ALLOW_BIN bat rg fd jq
+MOUNT_GROUP xdg-config agent-state
+PLUGIN cordon-fish cordon-hud
+
+# Read-only toolchain mounts
+MOUNT /usr:ro
+MOUNT /lib:ro
+MOUNT /lib64:ro
+MOUNT /bin:ro
+MOUNT ~/.cargo/bin:ro
+MOUNT ~/.local/bin:ro
+
+# Writable OpenCode state & cache mounts
+MOUNT ~/.config/opencode:rw
+MOUNT ~/.local/share/opencode:rw
+MOUNT ~/.cache/opencode:rw
+
+# Mask container-escape and host virtualization binaries
+MASK /usr/bin/docker /usr/bin/podman /usr/bin/virsh /usr/bin/ssh /usr/bin/scp /usr/bin/rsync /usr/bin/nc /usr/bin/ncat /usr/bin/socat
+
+# Mask credential directories inside $HOME with empty tmpfs
+MASK_DIR ~/.ssh ~/.aws ~/.gnupg ~/.kube ~/.config/gcloud ~/.docker
+
+# Allowlisted L7 HTTPS endpoints
+ALLOW_DOMAIN api.anthropic.com api.openai.com generativelanguage.googleapis.com api.github.com crates.io static.crates.io pypi.org files.pythonhosted.org
+
+# Deny data-exfiltration & tunnel sinks
+DENY_DOMAIN pastebin.com transfer.sh webhook.site ngrok.io raw.githubusercontent.com
+
+ENV OPENCODE_SANDBOX=cordon
+ENV TERM=xterm-256color
+CMD ["opencode"]

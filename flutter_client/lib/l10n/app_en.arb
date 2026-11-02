@@ -1,0 +1,201 @@
+{
+  "@@locale": "en",
+  "appTitle": "Cordon Control Plane",
+  "appSubtitle": "5-Gate Kernel Sandbox & L3-L7 Network Inspection",
+  "navProfiles": "Profiles",
+  "navGates": "5-Gate Rail",
+  "navSimulator": "L7 Simulator",
+  "navConfig": "Config Preview",
+  "navTelemetry": "Audit Stream",
+  "themeLight": "Light",
+  "themeDark": "Dark",
+  "themeHighContrast": "High Contrast (7:1)",
+  "semanticLocaleToggle": "Switch interface language",
+  "settingsLabel": "Display settings",
+  "healthChecking": "Checking control plane...",
+  "healthOnline": "Control plane online (v{version})",
+  "@healthOnline": {
+    "description": "Health indicator when the API responds",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "healthOffline": "Control plane unreachable",
+  "loadingLabel": "Loading",
+  "retryLabel": "Retry",
+  "errorTitle": "Request failed",
+  "connectionErrorMessage": "Cannot reach the Cordon control plane at {baseUrl}.",
+  "@connectionErrorMessage": {
+    "description": "Connection failure message",
+    "placeholders": {
+      "baseUrl": {
+        "type": "String"
+      }
+    }
+  },
+  "timeoutErrorMessage": "The request timed out. Is the control plane busy?",
+  "serverErrorMessage": "HTTP {status}: {message}",
+  "@serverErrorMessage": {
+    "description": "RFC 7807 problem details summary",
+    "placeholders": {
+      "status": {
+        "type": "int"
+      },
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "unexpectedErrorMessage": "Unexpected response from the control plane.",
+  "profilesTitle": "Sandbox Profiles",
+  "profilesEmpty": "No sandbox profiles are registered on this control plane.",
+  "profileCardLabel": "Sandbox profile {slug}",
+  "@profileCardLabel": {
+    "description": "Screen-reader label for a profile card",
+    "placeholders": {
+      "slug": {
+        "type": "String"
+      }
+    }
+  },
+  "profileMeta": "FS: {fsMode} | NET: {netMode} | .git RO: {gitProtected}",
+  "@profileMeta": {
+    "description": "Profile containment posture summary line",
+    "placeholders": {
+      "fsMode": {
+        "type": "String"
+      },
+      "netMode": {
+        "type": "String"
+      },
+      "gitProtected": {
+        "type": "String"
+      }
+    }
+  },
+  "profileUseInSimulator": "Simulate",
+  "profileUseInSimulatorSemantics": "Use profile {slug} in the L7 Simulator",
+  "@profileUseInSimulatorSemantics": {
+    "description": "Screen-reader label for the per-card simulate action",
+    "placeholders": {
+      "slug": {
+        "type": "String"
+      }
+    }
+  },
+  "gatesTitle": "5-Gate Rail",
+  "gateLabel": "Gate {number}",
+  "@gateLabel": {
+    "description": "Gate selector button label",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "gate1Title": "Gate 1: Network Namespace & iptables",
+  "gate1Body": "Dedicated ip netns + iptables enforcement: agent-net 10.200.1.2/24 with route_localnet=1, TCP 80/443 REDIRECT to :8080, UDP 443 QUIC REJECT, and fail-closed FORWARD DROP.",
+  "gate2Title": "Gate 2: AppArmor 4.0 MAC",
+  "gate2Body": "Mandatory Access Control (abi <abi/4.0>) denying capability sys_admin, net_admin, and sys_ptrace, blocking /tmp execution, and protecting ~/.ssh, ~/.aws, and ~/.gnupg.",
+  "gate3Title": "Gate 3: Bubblewrap VFS",
+  "gate3Body": "Unprivileged mount, pid, and ipc namespaces (--ro-bind / /) masking 20 destructive binaries with /dev/null, refusing / or HOME read-write mounts, and binding .git read-only (EC-01).",
+  "gate4Title": "Gate 4: Layer 7 mitmproxy",
+  "gate4Body": "Default-deny domain allowlist, DoH block, FR-5.4 mutating HTTP verb guard (POST blocked on package registries), and 9-pattern secret exfiltration scanner.",
+  "gate5Title": "Gate 5: tshark PCAP Ring Buffer",
+  "gate5Body": "Bounded 1 GB rotating L3/L4 packet capture paired with structured JSONL audit logs and Prometheus telemetry.",
+  "simulatorTitle": "L7 Policy Simulator",
+  "simProfileLabel": "Profile",
+  "simProfileEmpty": "No profiles available on this control plane.",
+  "simUrlLabel": "Target URL",
+  "simUrlRequired": "Target URL is required",
+  "simMethodLabel": "HTTP Method",
+  "simBodyLabel": "Request Body (optional)",
+  "simBodyHint": "Payload scanned for leaked credentials",
+  "evaluateFlowButton": "Evaluate L7 Flow",
+  "presetAllowLlm": "Preset: Allowed LLM POST",
+  "presetBlockDoh": "Preset: Block DoH Bypass",
+  "presetBlockPyPiPost": "Preset: Block PyPI POST",
+  "presetBlockSecret": "Preset: Block Secret Leak",
+  "simIdlePrompt": "Configure a flow, then press Evaluate L7 Flow to query the live policy engine.",
+  "simRequestSummary": "{method} {url}",
+  "@simRequestSummary": {
+    "description": "Echo of the evaluated request line",
+    "placeholders": {
+      "method": {
+        "type": "String"
+      },
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "simVerdictLabel": "Verdict",
+  "simVerdictSummary": "{verdict} ({status}) | Rule: {rule}",
+  "@simVerdictSummary": {
+    "description": "Policy decision summary line",
+    "placeholders": {
+      "verdict": {
+        "type": "String"
+      },
+      "status": {
+        "type": "int"
+      },
+      "rule": {
+        "type": "String"
+      }
+    }
+  },
+  "simReasonLabel": "Reason",
+  "simLatencyLabel": "Evaluation latency: {micros} us",
+  "@simLatencyLabel": {
+    "description": "Server-measured policy evaluation latency",
+    "placeholders": {
+      "micros": {
+        "type": "int"
+      }
+    }
+  },
+  "configTitle": "Launch Plan Preview",
+  "configContentLabel": "Cordonfile Content",
+  "configContentRequired": "Cordonfile content is required",
+  "configFormatLabel": "Format",
+  "compileButton": "Preview Launch Plan",
+  "configIdlePrompt": "Paste a Cordonfile, Cordonfile.toml, or cordon.json, then preview its deterministic 5-gate sandbox launch plan.",
+  "planProfileLabel": "Profile",
+  "planWorkspaceLabel": "Workspace",
+  "planGatesLabel": "Gates Applied",
+  "planCommandLabel": "Command",
+  "formatCordonfile": "Cordonfile",
+  "formatToml": "Cordonfile.toml",
+  "formatJson": "cordon.json",
+  "eventsTitle": "Audit Stream",
+  "eventsRefresh": "Refresh",
+  "eventsEmpty": "No audit events recorded yet. Evaluate an L7 flow to generate telemetry.",
+  "eventCardLabel": "Audit event: {subject}",
+  "@eventCardLabel": {
+    "description": "Screen-reader label for an audit event card",
+    "placeholders": {
+      "subject": {
+        "type": "String"
+      }
+    }
+  },
+  "eventMeta": "{plane} | {severity} | {verdict}",
+  "@eventMeta": {
+    "description": "Audit event metadata line",
+    "placeholders": {
+      "plane": {
+        "type": "String"
+      },
+      "severity": {
+        "type": "String"
+      },
+      "verdict": {
+        "type": "String"
+      }
+    }
+  },
+  "attributionFooter": "Developed by PyCentric | Cordon Layer 0 Security Engine (ADR-L0-SEC-02) | AGPL-3.0-only | Source: https://github.com/pycentric/cordon"
+}

@@ -1,0 +1,26 @@
+#!/usr/bin/env -S cordon run -f
+# Reproducible Air-Gapped Cordon Environment for Untrusted Python / uv Scripts
+# Governing ADR: ADR-L0-SEC-02
+# Usage:
+#   ./configs/Cordonfile.python
+#   cordon run -f configs/Cordonfile.python -w /path/to/project -v /data/datasets:ro -- python3 -I script.py
+FROM untrusted-code
+NAME python-airgap-sandbox
+DESCRIPTION Zero-egress air-gapped Bubblewrap sandbox for untrusted Python scripts and uv workloads
+WORKDIR .
+ALLOW_GROUP coreutils python-uv
+
+MOUNT /usr:ro
+MOUNT /lib:ro
+MOUNT /lib64:ro
+MOUNT /bin:ro
+MOUNT ~/.local/bin:ro
+MOUNT ~/.cache/uv:ro
+
+MASK /usr/bin/docker /usr/bin/podman /usr/bin/ssh /usr/bin/scp /usr/bin/curl /usr/bin/wget /usr/bin/nc /usr/bin/socat
+MASK_DIR ~/.ssh ~/.aws ~/.gnupg ~/.kube ~/.config
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONSAFEPATH=1
+CMD ["python3", "-I"]

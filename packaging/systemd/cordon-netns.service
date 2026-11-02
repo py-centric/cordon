@@ -1,0 +1,20 @@
+[Unit]
+Description=PyCentric Cordon Isolated Network Namespace & L3/L4 Firewall Provisioner
+Documentation=https://pycentric.co.za
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/cordon/setup-sandbox-net.sh
+# Gate 1 provisioning needs exactly: CAP_SYS_ADMIN (ip netns add bind-mounts),
+# CAP_NET_ADMIN (veth/iptables/sysctl), and CAP_NET_RAW (tshark capture).
+# Everything else is dropped from the bounding set.
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_SYS_ADMIN
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW CAP_SYS_ADMIN
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

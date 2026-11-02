@@ -1,0 +1,60 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: pycentric-cordon
+Upstream-Contact: legal@pycentric.co.za
+Source: https://github.com/pycentric/cordon
+Comment:
+ The PyCentric-branded distribution package is distributed by PyCentric
+ (Pty) Ltd, the copyright owner, under the PyCentric Proprietary Software
+ License (LicenseRef-PyCentric-Proprietary). The complete terms are
+ installed at /usr/share/doc/pycentric-cordon/LICENSE-PYCENTRIC.md.
+ .
+ The corresponding source code of the Cordon engine is offered
+ independently under GNU Affero General Public License version 3 only
+ (AGPL-3.0-only). The exact source location for this package version is
+ given in the machine-readable file
+ /usr/share/doc/pycentric-cordon/SOURCE_OFFER.txt (convention: the
+ https://github.com/pycentric/cordon tree at the git tag matching the
+ package version). Rights in that source code under the AGPL are not
+ limited by this package's terms.
+ .
+ Third-party open source components remain under their own licenses and
+ are not relicensed by LicenseRef-PyCentric-Proprietary. This includes
+ runtime tools invoked as separate processes and NOT shipped in this
+ package: bubblewrap (LGPL-2.1-or-later), the tshark and Wireshark
+ command-line utilities (GPL-2.0-or-later), and mitmproxy (MIT). Their
+ license documents are installed by their own packages.
+
+Files: *
+Copyright: 2026 PyCentric (Pty) Ltd
+License: LicenseRef-PyCentric-Proprietary
+Comment:
+ The proprietary terms govern this branded package as conveyed by
+ PyCentric. Summary (informational only; the full terms govern): use is
+ licensed for the licensee's own internal business and personal purposes;
+ reverse engineering is prohibited except to the extent applicable law
+ expressly permits; no trade mark rights are granted beyond nominative
+ use; the software is provided "as is"; South African law governs.
+
+Files: bin/cordon usr/bin/cordon
+Copyright: 2026 PyCentric (Pty) Ltd and the Cordon contributors
+License: LicenseRef-PyCentric-Proprietary
+Comment:
+ The release binary is statically linked against open source dependency
+ components under permissive licenses (MIT, Apache-2.0, Apache-2.0 WITH
+ LLVM-exception, BSD-2-Clause, BSD-3-Clause, ISC, Zlib, Unicode-3.0,
+ BSL-1.0, CC0-1.0, and MIT-0; the exact pinned component set is recorded
+ in Cargo.lock and uv.lock of the source tree at the Source location
+ above). Those components remain under their own licenses; their required
+ copyright and permission notices are preserved in the source tree, and a
+ generated third-party notice file is included with the release artifacts
+ or supplied on request to legal@pycentric.co.za.
+
+License: LicenseRef-PyCentric-Proprietary
+ The complete proprietary terms are installed at
+ /usr/share/doc/pycentric-cordon/LICENSE-PYCENTRIC.md and are available at
+ <https://github.com/pycentric/cordon/blob/main/LICENSE-PYCENTRIC.md>.
+ .
+ On Debian systems, the complete text of the GNU Affero General Public
+ License version 3 (which governs the corresponding source code) can be
+ found in /usr/share/common-licenses/AGPL-3 and in the file
+ /usr/share/doc/pycentric-cordon/LICENSE.

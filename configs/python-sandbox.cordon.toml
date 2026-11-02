@@ -1,0 +1,50 @@
+# Reproducible Air-Gapped Cordon TOML Environment for Untrusted Python / uv Scripts
+# Governing ADR: ADR-L0-SEC-02
+# Usage:
+#   cordon run -f configs/python-sandbox.cordon.toml -w /path/to/project -- python3 -I script.py
+
+[environment]
+name = "python-airgap-sandbox"
+base_profile = "untrusted-code"
+description = "Zero-egress air-gapped Bubblewrap sandbox for untrusted Python scripts and uv workloads"
+workdir = "."
+
+[filesystem]
+readonly_mounts = [
+  "/usr",
+  "/lib",
+  "/lib64",
+  "/bin",
+  "~/.local/bin",
+  "~/.cache/uv"
+]
+writable_mounts = []
+masked_binaries = [
+  "/usr/bin/docker",
+  "/usr/bin/podman",
+  "/usr/bin/ssh",
+  "/usr/bin/scp",
+  "/usr/bin/curl",
+  "/usr/bin/wget",
+  "/usr/bin/nc",
+  "/usr/bin/socat"
+]
+masked_dirs = [
+  "~/.ssh",
+  "~/.aws",
+  "~/.gnupg",
+  "~/.kube",
+  "~/.config"
+]
+
+[network]
+allowed_domains = []
+denied_domains = ["*"]
+
+[env]
+PYTHONDONTWRITEBYTECODE = "1"
+PYTHONUNBUFFERED = "1"
+PYTHONSAFEPATH = "1"
+
+[runtime]
+cmd = ["python3", "-I"]

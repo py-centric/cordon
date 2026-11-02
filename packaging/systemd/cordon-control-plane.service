@@ -1,0 +1,32 @@
+[Unit]
+Description=PyCentric Cordon 5-Gate Sandbox HTTP Control Plane & Telemetry Dashboard
+Documentation=https://pycentric.co.za
+After=network.target cordon-netns.service
+Wants=cordon-netns.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/cordon serve --host 127.0.0.1 --port 8095
+Restart=on-failure
+RestartSec=3
+Environment=RUST_LOG=info
+
+# Hardening: stateless HTTP control plane needs no privileges, no writable
+# filesystem, and only loopback TCP plus local IPC.
+DynamicUser=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+PrivateDevices=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

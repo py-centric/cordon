@@ -1,0 +1,26 @@
+name: cordon_flutter_client
+description: PyCentric Cordon Multi-Platform Sandbox & L7 Telemetry Companion UI (Mobile, Tablet, Desktop, Web).
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.7.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  # HTTP control-plane client (pinned to the 1.x API surface).
+  http: ^1.2.0
+  # Pinned to the constraint enforced by flutter_localizations on this SDK.
+  intl: ^0.20.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  generate: true

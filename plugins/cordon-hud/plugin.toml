@@ -1,0 +1,33 @@
+# Cordon Plugin Manifest: cordon-hud
+# Tactical Heads-Up Display (HUD) status bar, telemetry prompt, and operator aliases.
+# Activate via: set -g @plugin 'cordon-plugins/cordon-hud'
+
+[plugin]
+name = "cordon-hud"
+repo_id = "cordon-plugins/cordon-hud"
+version = "0.2.0"
+description = "Tactical Heads-Up Display (HUD): multi-segment telemetry prompt (profile, git branch, net mode, active groups), curated agent aliases (ag, oc, py, bat-rg, ll), and search-tools preloading."
+
+[features]
+fish_autosuggest = true
+syntax_highlighting = true
+abbreviate_cwd = true
+powerline_prompt = true
+startup_banner = true
+
+[groups]
+default_command_groups = ["coreutils", "shell-builtins", "search-tools", "vcs-git"]
+default_directory_groups = ["xdg-config"]
+
+[aliases]
+ll = "ls configs"
+lm = "ls mounts"
+lb = "ls bins"
+lg = "ls groups"
+lp = "ls plugins"
+ag = "./configs/Cordonfile.antigravity"
+oc = "./configs/Cordonfile.opencode"
+py = "./configs/Cordonfile.python"
+airgap = "net airgap"
+hostnet = "net direct"
+bat-rg = "allow-group search-tools"

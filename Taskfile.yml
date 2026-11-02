@@ -1,0 +1,234 @@
+version: '3'
+
+vars:
+  PROJECT_NAME: 'pycentric-cordon'
+  VERSION: '1.0.0'
+  PORT: '{{.PORT | default "8095"}}'
+  HOST: '{{.HOST | default "127.0.0.1"}}'
+  LOG_LEVEL: '{{.LOG_LEVEL | default "info"}}'
+  CONTAINER_ENGINE:
+    sh: |
+      if command -v podman >/dev/null 2>&1; then
+        echo "podman"
+      elif command -v docker >/dev/null 2>&1; then
+        echo "docker"
+      else
+        echo "none"
+      fi
+
+tasks:
+  default:
+    desc: 'Display available Cordon tasks'
+    cmds:
+      - task --list
+
+  build:
+    desc: 'Compile type-safe Rust Cordon binary in release mode'
+    cmds:
+      - cargo build --release --offline
+
+  build:artifacts:
+    desc: 'Build Cordon release binary and packaging bundle for pc CLI'
+    cmds:
+      - cargo build --release --offline
+
+  clean:
+    desc: 'Remove cargo build artifacts and distribution outputs'
+    cmds:
+      - cargo clean
+      - rm -rf dist/
+
+  clean:artifacts:
+    desc: 'Clean release artifacts and temporary distribution bundles for pc CLI'
+    cmds:
+      - rm -rf dist/
+
+  lint:
+    desc: 'Run cargo fmt check and strict cargo clippy pedantic/unwrap checks'
+    cmds:
+      - cargo fmt -- --check
+      - cargo clippy --all-targets --offline -- -D warnings
+
+  fmt:
+    desc: 'Format all Rust sources with rustfmt'
+    cmds:
+      - cargo fmt
+
+  test:
+    desc: 'Execute Cordon Rust unit and integration test suite'
+    cmds:
+      - cargo test --offline
+
+  test:fast:
+    desc: 'Execute fast library unit tests for pc test --mode fast'
+    cmds:
+      - cargo test --lib --offline
+
+  test:integration:
+    desc: 'Execute 5-gate sandbox, config, CLI, and API integration tests'
+    cmds:
+      - cargo test --test cordon_integration --test cordon_api_and_cli --offline
+
+  mock:test-full:
+    desc: 'Execute full-stack integration test suite for pc test --mode integration'
+    cmds:
+      - cargo test --test cordon_integration --test cordon_api_and_cli --offline
+
+  test:contract:
+    desc: 'Verify RFC 7807 API contracts, Cordonfile schemas, and deployment script syntax'
+    cmds:
+      - cargo test --test cordon_api_and_cli --offline
+      - bash -n deploy/bin/agent-sandbox
+      - bash -n deploy/bin/agent-shell
+      - bash -n deploy/net/setup-sandbox-net.sh
+      - bash -n deploy/tests/verify_sandbox_tv.sh
+
+  test:stress:
+    desc: 'Execute ignored-marked sandbox hardening stress checks (tests/cordon_hardening.rs)'
+    cmds:
+      - cargo test --test cordon_hardening --offline -- --ignored
+
+  test:coverage:
+    desc: 'Measure LLVM source-based code coverage via cargo-llvm-cov (>= 90% gate)'
+    cmds:
+      - LLVM_COV=/usr/sbin/llvm-cov LLVM_PROFDATA=/usr/sbin/llvm-profdata cargo llvm-cov --offline
+
+  cov:
+    desc: 'Alias for test:coverage'
+    cmds:
+      - LLVM_COV=/usr/sbin/llvm-cov LLVM_PROFDATA=/usr/sbin/llvm-profdata cargo llvm-cov --offline
+
+  doctor:
+    desc: 'Run Cordon host kernel LSM and sandbox toolchain diagnostics'
+    cmds:
+      - cargo run --offline -- doctor
+
+  profiles:
+    desc: 'List all 6 built-in universal workload sandbox profiles'
+    cmds:
+      - cargo run --offline -- profiles
+
+  configs:
+    desc: 'List all built-in reproducible Cordonfile environment templates'
+    cmds:
+      - cargo run --offline -- config list-templates
+
+  serve:
+    desc: 'Start the Cordon axum HTTP Control Plane and WCAG AA Web Dashboard'
+    cmds:
+      - cargo run --offline -- serve --host {{.HOST}} --port {{.PORT}}
+
+  dev:run:
+    desc: 'Launch Cordon control plane for pc dev'
+    cmds:
+      - cargo run --offline -- serve --host {{.HOST}} --port {{.PORT}}
+
+  dev:hybrid:
+    desc: 'Run Cordon control plane and telemetry dashboard in hybrid dev mode'
+    cmds:
+      - cargo run --offline -- serve --host {{.HOST}} --port {{.PORT}}
+
+  tui:
+    desc: 'Render the ratatui terminal telemetry dashboard'
+    cmds:
+      - cargo run --offline -- tui
+
+  docs:all:
+    desc: 'Generate Rust API docs and validate all Markdown/PHP documentation artifacts'
+    cmds:
+      - cargo doc --no-deps --offline
+      - task: validate-docs
+
+  docs:build:
+    desc: 'Build Rust crate documentation'
+    cmds:
+      - cargo doc --no-deps --offline
+
+  validate-docs:
+    desc: 'Validate Markdown and Rust sources for zero unicode em-dashes (constitutional typography rule)'
+    cmds:
+      - bash scripts/check-emdash.sh
+
+  verify-deploy:
+    desc: 'Syntax-check all Bash deployment, packaging, and completion scripts'
+    cmds:
+      - bash -n deploy/bin/agent-sandbox
+      - bash -n deploy/bin/agent-shell
+      - bash -n deploy/net/setup-sandbox-net.sh
+      - bash -n deploy/tests/verify_sandbox_tv.sh
+      - bash -n scripts/package-dist.sh
+      - bash -n packaging/completions/cordon.bash
+
+  completions:generate:
+    desc: 'Generate Bash, Zsh, and Fish completion scripts in packaging/completions/'
+    cmds:
+      - bash scripts/package-dist.sh completions
+
+  completions:install:
+    desc: 'Install Cordon binary, starter configs, and Bash/Zsh/Fish completions for current user'
+    cmds:
+      - bash scripts/package-dist.sh install-user
+
+  deploy:preflight:
+    desc: 'Run preflight kernel, config, and script checks before host deployment'
+    cmds:
+      - task: verify-deploy
+      - cargo run --offline -- config validate --file configs/Cordonfile.opencode
+      - cargo run --offline -- config validate --file configs/Cordonfile.antigravity
+      - cargo run --offline -- config validate --file configs/Cordonfile.python
+      - cargo run --offline -- config validate --file configs/package-build.cordon.toml
+
+  deploy:canary:
+    desc: 'Dry-run compile all 4 workload templates to verify canary readiness'
+    cmds:
+      - cargo run --offline -- run -f configs/Cordonfile.opencode -w . --dry-run
+      - cargo run --offline -- run -f configs/Cordonfile.antigravity -w . --dry-run
+      - cargo run --offline -- run -f configs/Cordonfile.python -w . --dry-run
+      - cargo run --offline -- run -f configs/package-build.cordon.toml -w . --dry-run
+
+  deploy:verify:
+    desc: 'Verify compiled AppArmor 4.0 and network namespace policies'
+    cmds:
+      - cargo run --offline -- render-apparmor -p ai-agent >/dev/null
+      - cargo run --offline -- render-netns -p ai-agent >/dev/null
+
+  deploy:switch:
+    desc: 'Install Cordon binary, configs, and shell completions into user directories'
+    cmds:
+      - bash scripts/package-dist.sh install-user
+
+  deploy:rollback:
+    desc: 'Remove user-local Cordon wrapper symlinks cleanly'
+    cmds:
+      - rm -f ~/.local/bin/cordon
+
+  package:tarball:
+    desc: 'Package standalone Linux x86_64 release tarball + SHA256SUMS in dist/'
+    cmds:
+      - bash scripts/package-dist.sh tarball
+
+  package:deb:
+    desc: 'Package Debian/Ubuntu .deb archive in dist/'
+    cmds:
+      - bash scripts/package-dist.sh deb
+
+  package:all:
+    desc: 'Build all redistributable Cordon release artifacts (.tar.gz, .deb, SHA256SUMS)'
+    cmds:
+      - bash scripts/package-dist.sh all
+
+  release:sanitize:
+    desc: 'Pre-release hygiene gate: stray-artifact tracking scan plus gitleaks secret scan'
+    cmds:
+      - bash scripts/export-public.sh --check-only
+
+  release:export:
+    desc: 'Sanitized squashed public export of the AGPL open core (refuses on a dirty tree)'
+    cmds:
+      - bash scripts/export-public.sh {{.OUTPUT_DIR | default ""}}
+
+  install:local:
+    desc: 'Install release binary, starter configs, and Bash/Zsh/Fish completions for current user'
+    cmds:
+      - bash scripts/package-dist.sh install-user
+

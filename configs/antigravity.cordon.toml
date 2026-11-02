@@ -1,0 +1,71 @@
+# Reproducible Cordon TOML Environment for Antigravity Agentic Coding Assistant
+# Governing ADR: ADR-L0-SEC-02
+# Usage:
+#   cordon run -f configs/antigravity.cordon.toml -w /path/to/repo -- bash --norc
+
+[environment]
+name = "antigravity-agent"
+base_profile = "ai-agent"
+description = "Reproducible 5-gate sandbox for Google DeepMind Antigravity coding assistant"
+workdir = "."
+
+[filesystem]
+readonly_mounts = [
+  "/usr",
+  "/lib",
+  "/lib64",
+  "/bin",
+  "~/.cargo/bin",
+  "~/.local/bin",
+  "~/.gemini/config",
+  "~/.gemini/antigravity/mcp"
+]
+writable_mounts = [
+  "~/.gemini/antigravity/brain",
+  "~/.cache"
+]
+masked_binaries = [
+  "/usr/bin/docker",
+  "/usr/bin/podman",
+  "/usr/bin/virsh",
+  "/usr/bin/ssh",
+  "/usr/bin/scp",
+  "/usr/bin/rsync",
+  "/usr/bin/nc",
+  "/usr/bin/ncat",
+  "/usr/bin/socat"
+]
+masked_dirs = [
+  "~/.ssh",
+  "~/.aws",
+  "~/.gnupg",
+  "~/.kube",
+  "~/.config/gcloud",
+  "~/.docker"
+]
+
+[network]
+allowed_domains = [
+  "generativelanguage.googleapis.com",
+  "aiplatform.googleapis.com",
+  "api.anthropic.com",
+  "api.openai.com",
+  "api.github.com",
+  "crates.io",
+  "static.crates.io",
+  "pypi.org",
+  "files.pythonhosted.org"
+]
+denied_domains = [
+  "pastebin.com",
+  "transfer.sh",
+  "webhook.site",
+  "ngrok.io"
+]
+
+[env]
+ANTIGRAVITY_SANDBOX = "cordon"
+PAGER = "cat"
+
+[runtime]
+cmd = ["bash", "--norc"]

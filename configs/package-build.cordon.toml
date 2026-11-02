@@ -1,0 +1,64 @@
+#!/usr/bin/env -S cordon run -f
+# Reproducible Cordon TOML Environment for Isolated Package Builds (pip / npm / cargo)
+# Governing ADR: ADR-L0-SEC-02
+# Usage:
+#   ./configs/package-build.cordon.toml
+#   cordon run -f configs/package-build.cordon.toml -w /path/to/project -- cargo build --release
+
+[environment]
+name = "package-builder"
+base_profile = "package-build"
+description = "Isolated package build sandbox with registry-only L7 allowlist"
+workdir = "."
+
+[filesystem]
+readonly_mounts = [
+  "/usr",
+  "/lib",
+  "/lib64",
+  "/bin",
+  "~/.cargo/bin",
+  "~/.rustup"
+]
+writable_mounts = [
+  "~/.cargo/registry",
+  "~/.cache/pip",
+  "~/.cache/uv"
+]
+masked_binaries = [
+  "/usr/bin/docker",
+  "/usr/bin/podman",
+  "/usr/bin/ssh",
+  "/usr/bin/scp",
+  "/usr/bin/nc",
+  "/usr/bin/socat"
+]
+masked_dirs = [
+  "~/.ssh",
+  "~/.aws",
+  "~/.gnupg",
+  "~/.kube"
+]
+
+[network]
+allowed_domains = [
+  "crates.io",
+  "static.crates.io",
+  "index.crates.io",
+  "pypi.org",
+  "files.pythonhosted.org",
+  "registry.npmjs.org"
+]
+denied_domains = [
+  "pastebin.com",
+  "transfer.sh",
+  "webhook.site",
+  "ngrok.io"
+]
+
+[env]
+CARGO_TERM_COLOR = "always"
+PIP_DISABLE_PIP_VERSION_CHECK = "1"
+
+[runtime]
+cmd = ["cargo", "build", "--release"]

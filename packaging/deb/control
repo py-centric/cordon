@@ -1,0 +1,14 @@
+Package: pycentric-cordon
+Version: 1.0.0
+Section: security
+Priority: optional
+Architecture: amd64
+Depends: libc6 (>= 2.34), bubblewrap (>= 0.8.0), iproute2, iptables
+Recommends: apparmor (>= 4.0), mitmproxy
+Maintainer: PyCentric Security Architecture <security@pycentric.co.za>
+Homepage: https://pycentric.co.za
+Description: Universal 5-Gate Host Sandbox and L3/L4/L7 Network Inspection Engine
+ Cordon enforces defense-in-depth containment for autonomous coding agents
+ (OpenCode, Antigravity, Claude Code), untrusted Python/uv scripts, and
+ isolated package builds using Bubblewrap namespaces, AppArmor 4.0 userns
+ mediation, Linux network namespaces, and L7 HTTP/HTTPS secret-leak inspection.

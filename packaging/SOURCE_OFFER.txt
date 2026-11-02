@@ -1,0 +1,26 @@
+# Corresponding Source Offer
+# GNU Affero General Public License version 3 only (AGPL-3.0-only),
+# sections 6 and 13. PyCentric (Pty) Ltd, 2026.
+#
+# Machine-readable source offer shipped with every PyCentric-branded
+# distribution package of pycentric-cordon. Keep this file intact and
+# installed together with the package. Keys are stable; values may change
+# per release. The tag convention binds this offer to the package version.
+
+Package: pycentric-cordon
+Version: 1.0.0
+License: AGPL-3.0-only
+Source-Repository: https://github.com/pycentric/cordon
+Source-Tag-Convention: v{version} (the git tag matching the Package Version field)
+Corresponding-Source: https://github.com/pycentric/cordon/tree/v1.0.0
+Source-Archive: https://github.com/pycentric/cordon/archive/refs/tags/v1.0.0.tar.gz
+Offer-Valid-Until: three (3) years from the build date of this package
+Offer-Contact: legal@pycentric.co.za
+Network-Interaction-Notice: Users interacting with the Cordon dashboard, HTTP
+  API, or Flutter client over a computer network may obtain the Corresponding
+  Source of the exact running version, at no charge, at the
+  Corresponding-Source location above (AGPL section 13).
+Branded-Package-Terms: LICENSE-PYCENTRIC.md (installed beside this file)
+Third-Party-Components: bundled and runtime components remain under their own
+  licenses (see LICENSE-PYCENTRIC.md Part B section 4 and the copyright file
+  installed with the package).

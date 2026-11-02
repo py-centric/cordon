@@ -1,0 +1,902 @@
+#compdef cordon agent-sandbox
+
+autoload -U is-at-least
+
+_cordon() {
+    typeset -A opt_args
+    typeset -a _arguments_options
+    local ret=1
+
+    if is-at-least 5.2; then
+        _arguments_options=(-s -S -C)
+    else
+        _arguments_options=(-s -C)
+    fi
+
+    local context curcontext="$curcontext" state line
+    _arguments "${_arguments_options[@]}" : \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+":: :_cordon_commands" \
+"*::: :->cordon" \
+&& ret=0
+    case $state in
+    (cordon)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cordon-command-$line[1]:"
+        case $line[1] in
+            (run)
+_arguments "${_arguments_options[@]}" : \
+'-p+[Workload profile (\`ai-agent\`, \`untrusted-code\`, \`package-build\`, \`network-audit\`, \`gui-desktop\`, \`airgapped\`)]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
+'--profile=[Workload profile (\`ai-agent\`, \`untrusted-code\`, \`package-build\`, \`network-audit\`, \`gui-desktop\`, \`airgapped\`)]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
+'-f+[Optional path to a reproducible \`Cordonfile\`, \`Cordonfile.toml\`, or \`cordon.json\`]:CONFIG:_files' \
+'--config=[Optional path to a reproducible \`Cordonfile\`, \`Cordonfile.toml\`, or \`cordon.json\`]:CONFIG:_files' \
+'-w+[Workspace directory to bind inside Bubblewrap]:WORKSPACE:_files -/' \
+'--workspace=[Workspace directory to bind inside Bubblewrap]:WORKSPACE:_files -/' \
+'*-v+[Docker/Podman-style volume mount (\`<HOST_PATH>\[\:ro|\:rw\]\`, defaults to \`\:ro\`)]:VOLUMES:_files' \
+'*--volume=[Docker/Podman-style volume mount (\`<HOST_PATH>\[\:ro|\:rw\]\`, defaults to \`\:ro\`)]:VOLUMES:_files' \
+'*--bind-ro=[Additional host paths to bind read-only (\`--ro-bind\`)]:BIND_RO:_files -/' \
+'*--bind-rw=[Additional host paths to bind read-write (\`--bind\`)]:BIND_RW:_files -/' \
+'*--mask-bin=[Additional host binary paths to mask with \`/dev/null\`]:MASK_BINS:_files' \
+'*--allow-bin=[Expose/unmask specific host binaries inside the sandbox (\`bat\`, \`rg\`, \`fd\`, \`jq\`, etc.)]:ALLOW_BINS:_command_names -e' \
+'*--allow-group=[Enable pre-populated command groups (\`coreutils\`, \`shell-builtins\`, \`search-tools\`, \`vcs-git\`, \`rust-toolchain\`, \`python-uv\`, \`node-web\`, \`net-diag\`)]:ALLOW_GROUPS:(coreutils shell-builtins search-tools vcs-git rust-toolchain python-uv node-web net-diag)' \
+'*--mount-group=[Mount pre-populated directory groups (\`system-libs\`, \`ssl-certs\`, \`xdg-config\`, \`agent-state\`, \`toolchain-caches\`, \`temp-scratch\`)]:MOUNT_GROUPS:_default' \
+'*-e+[Additional environment variables (\`KEY=VALUE\`) injected into the sandbox]:ENVS:_default' \
+'*--env=[Additional environment variables (\`KEY=VALUE\`) injected into the sandbox]:ENVS:_default' \
+'*--allow-domain=[Additional outbound domains permitted by L7 policy]:ALLOW_DOMAINS:_hosts' \
+'--offline[Force complete loopback air-gap (\`bwrap --unshare-net\`) regardless of profile default]' \
+'--host-net[Force direct host network namespace inside Bubblewrap (bypassing \`ip netns exec\`)]' \
+'--dry-run[Compile and print the 5-gate execution plan without spawning the child process]' \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'*::argv -- Target command and arguments to execute inside the sandbox (optional if `--config` defines `CMD`):_cmdambivalent' \
+&& ret=0
+;;
+(exec)
+_arguments "${_arguments_options[@]}" : \
+'-p+[Workload profile (\`ai-agent\`, \`untrusted-code\`, \`package-build\`, \`network-audit\`, \`gui-desktop\`, \`airgapped\`)]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
+'--profile=[Workload profile (\`ai-agent\`, \`untrusted-code\`, \`package-build\`, \`network-audit\`, \`gui-desktop\`, \`airgapped\`)]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
+'-f+[Optional path to a reproducible \`Cordonfile\`, \`Cordonfile.toml\`, or \`cordon.json\`]:CONFIG:_files' \
+'--config=[Optional path to a reproducible \`Cordonfile\`, \`Cordonfile.toml\`, or \`cordon.json\`]:CONFIG:_files' \
+'-w+[Workspace directory to bind inside Bubblewrap]:WORKSPACE:_files -/' \
+'--workspace=[Workspace directory to bind inside Bubblewrap]:WORKSPACE:_files -/' \
+'*-v+[Docker/Podman-style volume mount (\`<HOST_PATH>\[\:ro|\:rw\]\`, defaults to \`\:ro\`)]:VOLUMES:_files' \
+'*--volume=[Docker/Podman-style volume mount (\`<HOST_PATH>\[\:ro|\:rw\]\`, defaults to \`\:ro\`)]:VOLUMES:_files' \
+'*--bind-ro=[Additional host paths to bind read-only (\`--ro-bind\`)]:BIND_RO:_files -/' \
+'*--bind-rw=[Additional host paths to bind read-write (\`--bind\`)]:BIND_RW:_files -/' \
+'*--mask-bin=[Additional host binary paths to mask with \`/dev/null\`]:MASK_BINS:_files' \
+'*--allow-bin=[Expose/unmask specific host binaries inside the sandbox (\`bat\`, \`rg\`, \`fd\`, \`jq\`, etc.)]:ALLOW_BINS:_command_names -e' \
+'*--allow-group=[Enable pre-populated command groups (\`coreutils\`, \`shell-builtins\`, \`search-tools\`, \`vcs-git\`, \`rust-toolchain\`, \`python-uv\`, \`node-web\`, \`net-diag\`)]:ALLOW_GROUPS:(coreutils shell-builtins search-tools vcs-git rust-toolchain python-uv node-web net-diag)' \
+'*--mount-group=[Mount pre-populated directory groups (\`system-libs\`, \`ssl-certs\`, \`xdg-config\`, \`agent-state\`, \`toolchain-caches\`, \`temp-scratch\`)]:MOUNT_GROUPS:_default' \
+'*-e+[Additional environment variables (\`KEY=VALUE\`) injected into the sandbox]:ENVS:_default' \
+'*--env=[Additional environment variables (\`KEY=VALUE\`) injected into the sandbox]:ENVS:_default' \
+'*--allow-domain=[Additional outbound domains permitted by L7 policy]:ALLOW_DOMAINS:_hosts' \
+'--offline[Force complete loopback air-gap (\`bwrap --unshare-net\`) regardless of profile default]' \
+'--host-net[Force direct host network namespace inside Bubblewrap (bypassing \`ip netns exec\`)]' \
+'--dry-run[Compile and print the 5-gate execution plan without spawning the child process]' \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'*::argv -- Target command and arguments to execute inside the sandbox (optional if `--config` defines `CMD`):_cmdambivalent' \
+&& ret=0
+;;
+(shell)
+_arguments "${_arguments_options[@]}" : \
+'-p+[Workload profile (\`ai-agent\`, \`untrusted-code\`, \`package-build\`, \`network-audit\`, \`gui-desktop\`, \`airgapped\`)]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
+'--profile=[Workload profile (\`ai-agent\`, \`untrusted-code\`, \`package-build\`, \`network-audit\`, \`gui-desktop\`, \`airgapped\`)]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
+'-f+[Optional path to a reproducible \`Cordonfile\`, \`Cordonfile.toml\`, or \`cordon.json\`]:CONFIG:_files' \
+'--config=[Optional path to a reproducible \`Cordonfile\`, \`Cordonfile.toml\`, or \`cordon.json\`]:CONFIG:_files' \
+'-w+[Workspace directory to bind inside Bubblewrap]:WORKSPACE:_files -/' \
+'--workspace=[Workspace directory to bind inside Bubblewrap]:WORKSPACE:_files -/' \
+'*-v+[Docker/Podman-style volume mount (\`<HOST_PATH>\[\:ro|\:rw\]\`, defaults to \`\:ro\`)]:VOLUMES:_files' \
+'*--volume=[Docker/Podman-style volume mount (\`<HOST_PATH>\[\:ro|\:rw\]\`, defaults to \`\:ro\`)]:VOLUMES:_files' \
+'*--allow-bin=[Expose/unmask specific host binaries inside the sandbox (\`bat\`, \`rg\`, \`fd\`, \`jq\`, etc.)]:ALLOW_BINS:_command_names -e' \
+'*--allow-group=[Enable pre-populated command groups (\`coreutils\`, \`shell-builtins\`, \`search-tools\`, etc.)]:ALLOW_GROUPS:(coreutils shell-builtins search-tools vcs-git rust-toolchain python-uv node-web net-diag)' \
+'*--mount-group=[Mount pre-populated directory groups (\`xdg-config\`, \`agent-state\`, \`toolchain-caches\`, etc.)]:MOUNT_GROUPS:_default' \
+'--offline[Force complete loopback air-gap (\`bwrap --unshare-net\`)]' \
+'--host-net[Force direct host network namespace inside Bubblewrap]' \
+'--dry-run[Print the prepared sandbox shell command without spawning]' \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(repl)
+_arguments "${_arguments_options[@]}" : \
+'-p+[Initial workload profile slug]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
+'--profile=[Initial workload profile slug]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
+'-f+[Optional path to a reproducible \`Cordonfile\`, \`Cordonfile.toml\`, or \`cordon.json\`]:CONFIG:_files' \
+'--config=[Optional path to a reproducible \`Cordonfile\`, \`Cordonfile.toml\`, or \`cordon.json\`]:CONFIG:_files' \
+'-w+[Initial workspace directory]:WORKSPACE:_files -/' \
+'--workspace=[Initial workspace directory]:WORKSPACE:_files -/' \
+'*--allow-bin=[Expose/unmask specific host binaries in the REPL session (\`bat\`, \`rg\`, etc.)]:ALLOW_BINS:_command_names -e' \
+'*--allow-group=[Enable pre-populated command groups in the REPL session (\`coreutils\`, \`search-tools\`, etc.)]:ALLOW_GROUPS:(coreutils shell-builtins search-tools vcs-git rust-toolchain python-uv node-web net-diag)' \
+'*--mount-group=[Mount pre-populated directory groups in the REPL session (\`xdg-config\`, \`agent-state\`, etc.)]:MOUNT_GROUPS:_default' \
+'--offline[Start REPL in offline air-gap mode (\`bwrap --unshare-net\`)]' \
+'--host-net[Start REPL in direct host network mode]' \
+'--dry-run[Dry-run mode inside REPL (\`run\` / \`!<cmd>\` prints command instead of spawning)]' \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(profiles)
+_arguments "${_arguments_options[@]}" : \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(groups)
+_arguments "${_arguments_options[@]}" : \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(plugin)
+_arguments "${_arguments_options[@]}" : \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_cordon__subcmd__plugin_commands" \
+"*::: :->plugin" \
+&& ret=0
+
+    case $state in
+    (plugin)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cordon-plugin-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" : \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(info)
+_arguments "${_arguments_options[@]}" : \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::name -- Plugin name or repo identifier (`cordon-fish`, `cordon-hud`):(cordon-fish cordon-hud)' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_cordon__subcmd__plugin__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cordon-plugin-help-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(info)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(plugins)
+_arguments "${_arguments_options[@]}" : \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_cordon__subcmd__plugin_commands" \
+"*::: :->plugin" \
+&& ret=0
+
+    case $state in
+    (plugin)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cordon-plugin-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" : \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(info)
+_arguments "${_arguments_options[@]}" : \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'::name -- Plugin name or repo identifier (`cordon-fish`, `cordon-hud`):(cordon-fish cordon-hud)' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_cordon__subcmd__plugin__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cordon-plugin-help-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(info)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(config)
+_arguments "${_arguments_options[@]}" : \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_cordon__subcmd__config_commands" \
+"*::: :->config" \
+&& ret=0
+
+    case $state in
+    (config)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cordon-config-command-$line[1]:"
+        case $line[1] in
+            (list-templates)
+_arguments "${_arguments_options[@]}" : \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(init)
+_arguments "${_arguments_options[@]}" : \
+'-t+[Template slug (\`opencode\`, \`antigravity\`, \`python-sandbox\`, \`package-build\`)]:TEMPLATE:(opencode antigravity python-sandbox package-build)' \
+'--template=[Template slug (\`opencode\`, \`antigravity\`, \`python-sandbox\`, \`package-build\`)]:TEMPLATE:(opencode antigravity python-sandbox package-build)' \
+'-f+[Output format (\`cordonfile\`, \`toml\`, \`json\`)]:FORMAT:(cordonfile toml json)' \
+'--format=[Output format (\`cordonfile\`, \`toml\`, \`json\`)]:FORMAT:(cordonfile toml json)' \
+'-o+[Optional output file path (prints to stdout when omitted)]:OUTPUT:_files' \
+'--output=[Optional output file path (prints to stdout when omitted)]:OUTPUT:_files' \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(validate)
+_arguments "${_arguments_options[@]}" : \
+'-f+[Path to the configuration file to validate]:FILE:_files' \
+'--file=[Path to the configuration file to validate]:FILE:_files' \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_cordon__subcmd__config__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cordon-config-help-command-$line[1]:"
+        case $line[1] in
+            (list-templates)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(init)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(validate)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+;;
+(inspect-cmd)
+_arguments "${_arguments_options[@]}" : \
+'-p+[Workload profile slug]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
+'--profile=[Workload profile slug]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
+'-f+[Optional path to a reproducible \`Cordonfile\`, \`Cordonfile.toml\`, or \`cordon.json\`]:CONFIG:_files' \
+'--config=[Optional path to a reproducible \`Cordonfile\`, \`Cordonfile.toml\`, or \`cordon.json\`]:CONFIG:_files' \
+'-w+[Workspace directory to bind]:WORKSPACE:_files -/' \
+'--workspace=[Workspace directory to bind]:WORKSPACE:_files -/' \
+'*-v+[Docker/Podman-style volume mount (\`<HOST_PATH>\[\:ro|\:rw\]\`, defaults to \`\:ro\`)]:VOLUMES:_files' \
+'*--volume=[Docker/Podman-style volume mount (\`<HOST_PATH>\[\:ro|\:rw\]\`, defaults to \`\:ro\`)]:VOLUMES:_files' \
+'*--bind-ro=[Additional host paths to bind read-only]:BIND_RO:_files -/' \
+'*--bind-rw=[Additional host paths to bind read-write]:BIND_RW:_files -/' \
+'*--mask-bin=[Additional host binary paths to mask with \`/dev/null\`]:MASK_BINS:_files' \
+'*--allow-bin=[Expose/unmask specific host binaries (\`bat\`, \`rg\`, etc.)]:ALLOW_BINS:_command_names -e' \
+'*--allow-group=[Enable pre-populated command groups (\`coreutils\`, \`search-tools\`, etc.)]:ALLOW_GROUPS:(coreutils shell-builtins search-tools vcs-git rust-toolchain python-uv node-web net-diag)' \
+'*--mount-group=[Mount pre-populated directory groups (\`xdg-config\`, \`agent-state\`, etc.)]:MOUNT_GROUPS:_default' \
+'*-e+[Additional environment variables (\`KEY=VALUE\`) injected into the sandbox]:ENVS:_default' \
+'*--env=[Additional environment variables (\`KEY=VALUE\`) injected into the sandbox]:ENVS:_default' \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'*::argv -- Target command and arguments (optional if `--config` defines `CMD`):_cmdambivalent' \
+&& ret=0
+;;
+(render-apparmor)
+_arguments "${_arguments_options[@]}" : \
+'-p+[Workload profile slug]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
+'--profile=[Workload profile slug]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
+'--attach-path=[Binary path to attach the AppArmor profile to]:ATTACH_PATH:_files' \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(render-netns)
+_arguments "${_arguments_options[@]}" : \
+'-p+[Workload profile slug]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
+'--profile=[Workload profile slug]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(evaluate-url)
+_arguments "${_arguments_options[@]}" : \
+'-p+[Workload profile slug]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
+'--profile=[Workload profile slug]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
+'-u+[Outbound URL to inspect]:URL:_urls' \
+'--url=[Outbound URL to inspect]:URL:_urls' \
+'-m+[HTTP method (\`GET\`, \`POST\`, etc.)]:METHOD:(GET POST PUT PATCH DELETE HEAD)' \
+'--method=[HTTP method (\`GET\`, \`POST\`, etc.)]:METHOD:(GET POST PUT PATCH DELETE HEAD)' \
+'-b+[Optional HTTP request body to scan for leaked secrets]:BODY:_default' \
+'--body=[Optional HTTP request body to scan for leaked secrets]:BODY:_default' \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(doctor)
+_arguments "${_arguments_options[@]}" : \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(serve)
+_arguments "${_arguments_options[@]}" : \
+'--host=[Bind address]:HOST:_hosts' \
+'--port=[Bind TCP port]:PORT:_default' \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(tui)
+_arguments "${_arguments_options[@]}" : \
+'-p+[Initial workload profile (\`ai-agent\`, \`untrusted-code\`, \`package-build\`, \`network-audit\`, \`gui-desktop\`, \`airgapped\`)]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
+'--profile=[Initial workload profile (\`ai-agent\`, \`untrusted-code\`, \`package-build\`, \`network-audit\`, \`gui-desktop\`, \`airgapped\`)]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
+'-w+[Initial workspace directory]:WORKSPACE:_files -/' \
+'--workspace=[Initial workspace directory]:WORKSPACE:_files -/' \
+'--snapshot[Render a static non-interactive frame snapshot and exit immediately]' \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(completions)
+_arguments "${_arguments_options[@]}" : \
+'-o+[Optional output file path to write the generated completion script]:OUTPUT:_files' \
+'--output=[Optional output file path to write the generated completion script]:OUTPUT:_files' \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'-h[Print help]' \
+'--help[Print help]' \
+':shell -- Target shell (`bash`, `zsh`, `fish`, `elvish`, `powershell`):(bash elvish fish powershell zsh)' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_cordon__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cordon-help-command-$line[1]:"
+        case $line[1] in
+            (run)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(shell)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(repl)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(profiles)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(groups)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(plugin)
+_arguments "${_arguments_options[@]}" : \
+":: :_cordon__subcmd__help__subcmd__plugin_commands" \
+"*::: :->plugin" \
+&& ret=0
+
+    case $state in
+    (plugin)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cordon-help-plugin-command-$line[1]:"
+        case $line[1] in
+            (list)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(info)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(config)
+_arguments "${_arguments_options[@]}" : \
+":: :_cordon__subcmd__help__subcmd__config_commands" \
+"*::: :->config" \
+&& ret=0
+
+    case $state in
+    (config)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cordon-help-config-command-$line[1]:"
+        case $line[1] in
+            (list-templates)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(init)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(validate)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+(inspect-cmd)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(render-apparmor)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(render-netns)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(evaluate-url)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(doctor)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(serve)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(tui)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(completions)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
+}
+
+(( $+functions[_cordon_commands] )) ||
+_cordon_commands() {
+    local commands; commands=(
+'run:Compile and execute (or dry-run) any command or \`Cordonfile\` inside the 5-gate Cordon sandbox' \
+'exec:Compile and execute (or dry-run) any command or \`Cordonfile\` inside the 5-gate Cordon sandbox' \
+'shell:Launch an interactive sandboxed \`/bin/bash --norc\` shell inside Bubblewrap' \
+'repl:Start the interactive Cordon Sandbox Control & Execution REPL (\`cordon repl\`)' \
+'profiles:List all 6 built-in universal workload sandbox profiles' \
+'groups:List all 8 pre-populated command groups (\`coreutils\`, \`search-tools\`, etc.) and 6 directory groups (\`xdg-config\`, etc.)' \
+'plugin:Manage the tmux-style Cordon plugin ecosystem (\`cordon-fish\`, \`cordon-hud\`)' \
+'plugins:Manage the tmux-style Cordon plugin ecosystem (\`cordon-fish\`, \`cordon-hud\`)' \
+'config:Manage reproducible \`Cordonfile\` / \`Cordonfile.toml\` / \`cordon.json\` environment configs' \
+'inspect-cmd:Compile and inspect the Bubblewrap (\`bwrap\`) and \`ip netns\` launch plan' \
+'render-apparmor:Render the AppArmor 4.0 Mandatory Access Control profile' \
+'render-netns:Render the idempotent \`ip netns\`, \`veth\`, and \`iptables\` provisioning commands' \
+'evaluate-url:Evaluate an outbound HTTP/HTTPS request against L7 domain, DoH, and secret rules' \
+'doctor:Verify host kernel LSM capabilities and sandbox toolchain binaries' \
+'serve:Start the \`axum\` HTTP Control Plane and WCAG AA Web Dashboard' \
+'tui:Launch the interactive \`ratatui\` Terminal UI & Sandbox Session Launcher (or \`--snapshot\` for static frame)' \
+'completions:Generate shell completion scripts (\`bash\`, \`zsh\`, \`fish\`)' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cordon commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__completions_commands] )) ||
+_cordon__subcmd__completions_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon completions commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__config_commands] )) ||
+_cordon__subcmd__config_commands() {
+    local commands; commands=(
+'list-templates:List built-in reproducible environment templates (\`opencode\`, \`antigravity\`, \`python-sandbox\`, \`package-build\`)' \
+'init:Scaffold a reproducible \`Cordonfile\`, \`Cordonfile.toml\`, or \`cordon.json\` from a template' \
+'validate:Validate a \`Cordonfile\`, \`Cordonfile.toml\`, or \`cordon.json\` and preview its 5-gate launch plan' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cordon config commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__config__subcmd__help_commands] )) ||
+_cordon__subcmd__config__subcmd__help_commands() {
+    local commands; commands=(
+'list-templates:List built-in reproducible environment templates (\`opencode\`, \`antigravity\`, \`python-sandbox\`, \`package-build\`)' \
+'init:Scaffold a reproducible \`Cordonfile\`, \`Cordonfile.toml\`, or \`cordon.json\` from a template' \
+'validate:Validate a \`Cordonfile\`, \`Cordonfile.toml\`, or \`cordon.json\` and preview its 5-gate launch plan' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cordon config help commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__config__subcmd__help__subcmd__help_commands] )) ||
+_cordon__subcmd__config__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon config help help commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__config__subcmd__help__subcmd__init_commands] )) ||
+_cordon__subcmd__config__subcmd__help__subcmd__init_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon config help init commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__config__subcmd__help__subcmd__list-templates_commands] )) ||
+_cordon__subcmd__config__subcmd__help__subcmd__list-templates_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon config help list-templates commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__config__subcmd__help__subcmd__validate_commands] )) ||
+_cordon__subcmd__config__subcmd__help__subcmd__validate_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon config help validate commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__config__subcmd__init_commands] )) ||
+_cordon__subcmd__config__subcmd__init_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon config init commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__config__subcmd__list-templates_commands] )) ||
+_cordon__subcmd__config__subcmd__list-templates_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon config list-templates commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__config__subcmd__validate_commands] )) ||
+_cordon__subcmd__config__subcmd__validate_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon config validate commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__doctor_commands] )) ||
+_cordon__subcmd__doctor_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon doctor commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__evaluate-url_commands] )) ||
+_cordon__subcmd__evaluate-url_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon evaluate-url commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__groups_commands] )) ||
+_cordon__subcmd__groups_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon groups commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help_commands] )) ||
+_cordon__subcmd__help_commands() {
+    local commands; commands=(
+'run:Compile and execute (or dry-run) any command or \`Cordonfile\` inside the 5-gate Cordon sandbox' \
+'shell:Launch an interactive sandboxed \`/bin/bash --norc\` shell inside Bubblewrap' \
+'repl:Start the interactive Cordon Sandbox Control & Execution REPL (\`cordon repl\`)' \
+'profiles:List all 6 built-in universal workload sandbox profiles' \
+'groups:List all 8 pre-populated command groups (\`coreutils\`, \`search-tools\`, etc.) and 6 directory groups (\`xdg-config\`, etc.)' \
+'plugin:Manage the tmux-style Cordon plugin ecosystem (\`cordon-fish\`, \`cordon-hud\`)' \
+'config:Manage reproducible \`Cordonfile\` / \`Cordonfile.toml\` / \`cordon.json\` environment configs' \
+'inspect-cmd:Compile and inspect the Bubblewrap (\`bwrap\`) and \`ip netns\` launch plan' \
+'render-apparmor:Render the AppArmor 4.0 Mandatory Access Control profile' \
+'render-netns:Render the idempotent \`ip netns\`, \`veth\`, and \`iptables\` provisioning commands' \
+'evaluate-url:Evaluate an outbound HTTP/HTTPS request against L7 domain, DoH, and secret rules' \
+'doctor:Verify host kernel LSM capabilities and sandbox toolchain binaries' \
+'serve:Start the \`axum\` HTTP Control Plane and WCAG AA Web Dashboard' \
+'tui:Launch the interactive \`ratatui\` Terminal UI & Sandbox Session Launcher (or \`--snapshot\` for static frame)' \
+'completions:Generate shell completion scripts (\`bash\`, \`zsh\`, \`fish\`)' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cordon help commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__completions_commands] )) ||
+_cordon__subcmd__help__subcmd__completions_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help completions commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__config_commands] )) ||
+_cordon__subcmd__help__subcmd__config_commands() {
+    local commands; commands=(
+'list-templates:List built-in reproducible environment templates (\`opencode\`, \`antigravity\`, \`python-sandbox\`, \`package-build\`)' \
+'init:Scaffold a reproducible \`Cordonfile\`, \`Cordonfile.toml\`, or \`cordon.json\` from a template' \
+'validate:Validate a \`Cordonfile\`, \`Cordonfile.toml\`, or \`cordon.json\` and preview its 5-gate launch plan' \
+    )
+    _describe -t commands 'cordon help config commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__config__subcmd__init_commands] )) ||
+_cordon__subcmd__help__subcmd__config__subcmd__init_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help config init commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__config__subcmd__list-templates_commands] )) ||
+_cordon__subcmd__help__subcmd__config__subcmd__list-templates_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help config list-templates commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__config__subcmd__validate_commands] )) ||
+_cordon__subcmd__help__subcmd__config__subcmd__validate_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help config validate commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__doctor_commands] )) ||
+_cordon__subcmd__help__subcmd__doctor_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help doctor commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__evaluate-url_commands] )) ||
+_cordon__subcmd__help__subcmd__evaluate-url_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help evaluate-url commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__groups_commands] )) ||
+_cordon__subcmd__help__subcmd__groups_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help groups commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__help_commands] )) ||
+_cordon__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help help commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__inspect-cmd_commands] )) ||
+_cordon__subcmd__help__subcmd__inspect-cmd_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help inspect-cmd commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__plugin_commands] )) ||
+_cordon__subcmd__help__subcmd__plugin_commands() {
+    local commands; commands=(
+'list:List all available Cordon plugins (\`cordon-fish\`, \`cordon-hud\`, and custom \`plugins/*/plugin.toml\`)' \
+'info:Inspect manifest details, features, groups, and aliases for a specific plugin' \
+    )
+    _describe -t commands 'cordon help plugin commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__plugin__subcmd__info_commands] )) ||
+_cordon__subcmd__help__subcmd__plugin__subcmd__info_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help plugin info commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__plugin__subcmd__list_commands] )) ||
+_cordon__subcmd__help__subcmd__plugin__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help plugin list commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__profiles_commands] )) ||
+_cordon__subcmd__help__subcmd__profiles_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help profiles commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__render-apparmor_commands] )) ||
+_cordon__subcmd__help__subcmd__render-apparmor_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help render-apparmor commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__render-netns_commands] )) ||
+_cordon__subcmd__help__subcmd__render-netns_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help render-netns commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__repl_commands] )) ||
+_cordon__subcmd__help__subcmd__repl_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help repl commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__run_commands] )) ||
+_cordon__subcmd__help__subcmd__run_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help run commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__serve_commands] )) ||
+_cordon__subcmd__help__subcmd__serve_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help serve commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__shell_commands] )) ||
+_cordon__subcmd__help__subcmd__shell_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help shell commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__tui_commands] )) ||
+_cordon__subcmd__help__subcmd__tui_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help tui commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__inspect-cmd_commands] )) ||
+_cordon__subcmd__inspect-cmd_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon inspect-cmd commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__plugin_commands] )) ||
+_cordon__subcmd__plugin_commands() {
+    local commands; commands=(
+'list:List all available Cordon plugins (\`cordon-fish\`, \`cordon-hud\`, and custom \`plugins/*/plugin.toml\`)' \
+'info:Inspect manifest details, features, groups, and aliases for a specific plugin' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cordon plugin commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__plugin__subcmd__help_commands] )) ||
+_cordon__subcmd__plugin__subcmd__help_commands() {
+    local commands; commands=(
+'list:List all available Cordon plugins (\`cordon-fish\`, \`cordon-hud\`, and custom \`plugins/*/plugin.toml\`)' \
+'info:Inspect manifest details, features, groups, and aliases for a specific plugin' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cordon plugin help commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__plugin__subcmd__help__subcmd__help_commands] )) ||
+_cordon__subcmd__plugin__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon plugin help help commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__plugin__subcmd__help__subcmd__info_commands] )) ||
+_cordon__subcmd__plugin__subcmd__help__subcmd__info_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon plugin help info commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__plugin__subcmd__help__subcmd__list_commands] )) ||
+_cordon__subcmd__plugin__subcmd__help__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon plugin help list commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__plugin__subcmd__info_commands] )) ||
+_cordon__subcmd__plugin__subcmd__info_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon plugin info commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__plugin__subcmd__list_commands] )) ||
+_cordon__subcmd__plugin__subcmd__list_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon plugin list commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__profiles_commands] )) ||
+_cordon__subcmd__profiles_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon profiles commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__render-apparmor_commands] )) ||
+_cordon__subcmd__render-apparmor_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon render-apparmor commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__render-netns_commands] )) ||
+_cordon__subcmd__render-netns_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon render-netns commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__repl_commands] )) ||
+_cordon__subcmd__repl_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon repl commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__run_commands] )) ||
+_cordon__subcmd__run_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon run commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__serve_commands] )) ||
+_cordon__subcmd__serve_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon serve commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__shell_commands] )) ||
+_cordon__subcmd__shell_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon shell commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__tui_commands] )) ||
+_cordon__subcmd__tui_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon tui commands' commands "$@"
+}
+
+if [ "$funcstack[1]" = "_cordon" ]; then
+    _cordon "$@"
+else
+    compdef _cordon cordon
+fi
+
+# PyCentric Cordon wrapper completions (agent-sandbox)
+if (( $+functions[compdef] )); then
+compdef _cordon cordon agent-sandbox
+fi

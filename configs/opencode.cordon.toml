@@ -1,0 +1,70 @@
+# Reproducible Cordon TOML Environment for OpenCode CLI Agent
+# Governing ADR: ADR-L0-SEC-02
+# Usage:
+#   cordon run -f configs/opencode.cordon.toml -w /path/to/repo -- opencode
+
+[environment]
+name = "opencode-agent"
+base_profile = "ai-agent"
+description = "Reproducible 5-gate sandbox for OpenCode CLI autonomous coding agent"
+workdir = "."
+
+[filesystem]
+readonly_mounts = [
+  "/usr",
+  "/lib",
+  "/lib64",
+  "/bin",
+  "~/.cargo/bin",
+  "~/.local/bin"
+]
+writable_mounts = [
+  "~/.config/opencode",
+  "~/.local/share/opencode",
+  "~/.cache/opencode"
+]
+masked_binaries = [
+  "/usr/bin/docker",
+  "/usr/bin/podman",
+  "/usr/bin/virsh",
+  "/usr/bin/ssh",
+  "/usr/bin/scp",
+  "/usr/bin/rsync",
+  "/usr/bin/nc",
+  "/usr/bin/ncat",
+  "/usr/bin/socat"
+]
+masked_dirs = [
+  "~/.ssh",
+  "~/.aws",
+  "~/.gnupg",
+  "~/.kube",
+  "~/.config/gcloud",
+  "~/.docker"
+]
+
+[network]
+allowed_domains = [
+  "api.anthropic.com",
+  "api.openai.com",
+  "generativelanguage.googleapis.com",
+  "api.github.com",
+  "crates.io",
+  "static.crates.io",
+  "pypi.org",
+  "files.pythonhosted.org"
+]
+denied_domains = [
+  "pastebin.com",
+  "transfer.sh",
+  "webhook.site",
+  "ngrok.io",
+  "raw.githubusercontent.com"
+]
+
+[env]
+OPENCODE_SANDBOX = "cordon"
+TERM = "xterm-256color"
+
+[runtime]
+cmd = ["opencode"]

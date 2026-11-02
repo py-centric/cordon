@@ -1,0 +1,47 @@
+[Unit]
+Description=PyCentric Cordon Layer 7 Policy Engine (headless mitmdump, no web UI)
+Documentation=https://pycentric.co.za
+After=network-online.target cordon-netns.service
+Wants=network-online.target cordon-netns.service
+
+[Service]
+Type=simple
+User=cordon
+Group=cordon
+# Headless enforcement only: mitmdump (never mitmweb; no debug UI on the wire).
+# The shared policy addon (deploy/mitmproxy/agent_policy_addon.py) enforces the
+# canonical L7 rule table from $CORDON_POLICY_FILE (root-owned 0644) and emits
+# one canonical JSONL audit event per flow to stdout.
+Environment=HOME=/var/lib/cordon
+Environment=CORDON_POLICY_FILE=/run/cordon/policy.json
+ExecStart=/usr/bin/mitmdump --mode transparent --showhost --listen-host 10.200.1.1 --listen-port 8080 --set stream_large_bodies=5m --set termlog_verbosity=error -s /usr/lib/cordon/mitmproxy/agent_policy_addon.py
+Restart=on-failure
+RestartSec=3
+# Audit trail: canonical JSONL appended to /var/log/cordon/audit.jsonl.
+# LogsDirectory=cordon creates /var/log/cordon (0750); UMask=0027 makes the
+# appended audit file 0640. mitmdump's own terminal log is suppressed
+# (termlog_verbosity=error) so stdout stays machine-parseable ([INV-STDOUT-JSON]).
+LogsDirectory=cordon
+StateDirectory=cordon
+UMask=0027
+StandardOutput=append:/var/log/cordon/audit.jsonl
+StandardError=journal
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+ReadWritePaths=/var/log/cordon /var/lib/cordon
+
+[Install]
+WantedBy=multi-user.target
