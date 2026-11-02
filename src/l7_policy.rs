@@ -342,7 +342,9 @@ impl CordonPolicyEvaluator {
         {
             return Self::build_decision(
                 Verdict::Block,
-                &format!("Blocked mutating HTTP method '{method_upper}' to host '{host}' (FR-5.4)."),
+                &format!(
+                    "Blocked mutating HTTP method '{method_upper}' to host '{host}' (FR-5.4)."
+                ),
                 RULE_UNAUTHORIZED_MUTATING_METHOD,
                 url,
                 &method_upper,
@@ -566,8 +568,7 @@ mod tests {
                 evaluator.evaluate_request("https://pypi.org/legacy/", method, Some("upload"));
             assert_eq!(decision.verdict, Verdict::Block, "method '{method}'");
             assert_eq!(
-                decision.matched_rule,
-                RULE_UNAUTHORIZED_MUTATING_METHOD,
+                decision.matched_rule, RULE_UNAUTHORIZED_MUTATING_METHOD,
                 "method '{method}'"
             );
         }
@@ -644,8 +645,13 @@ mod tests {
             "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghij0123456789klmnop"
                 .to_owned(),
         );
-        let header_leak =
-            evaluator.evaluate_flow("https://api.openai.com/v1/models", "GET", None, false, &headers);
+        let header_leak = evaluator.evaluate_flow(
+            "https://api.openai.com/v1/models",
+            "GET",
+            None,
+            false,
+            &headers,
+        );
         assert_eq!(header_leak.verdict, Verdict::Block);
         assert_eq!(header_leak.matched_rule, "SECRET_JWT_BEARER");
     }
@@ -788,7 +794,11 @@ mod tests {
                     headers.insert(key.clone(), value.as_str().unwrap_or("").to_owned());
                 }
             }
-            let body = if payload.is_empty() { None } else { Some(payload) };
+            let body = if payload.is_empty() {
+                None
+            } else {
+                Some(payload)
+            };
 
             let decision = evaluator.evaluate_flow(url, method, body, body_streamed, &headers);
             match expected_verdict {

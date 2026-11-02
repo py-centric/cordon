@@ -87,9 +87,9 @@ static COMMAND_GROUPS: [CommandGroup; 8] = [
         slug: "coreutils",
         summary: "Standard POSIX file, text, and directory utilities",
         programs: &[
-            "ls", "cat", "cp", "mv", "rm", "mkdir", "rmdir", "head", "tail", "sort", "uniq",
-            "wc", "tr", "cut", "tee", "env", "pwd", "date", "touch", "ln", "chmod", "stat",
-            "basename", "dirname", "realpath",
+            "ls", "cat", "cp", "mv", "rm", "mkdir", "rmdir", "head", "tail", "sort", "uniq", "wc",
+            "tr", "cut", "tee", "env", "pwd", "date", "touch", "ln", "chmod", "stat", "basename",
+            "dirname", "realpath",
         ],
     },
     CommandGroup {
@@ -105,8 +105,8 @@ static COMMAND_GROUPS: [CommandGroup; 8] = [
         slug: "search-tools",
         summary: "Fast code search, syntax-highlighted viewing, and JSON/YAML processors (bat, ripgrep, fd, jq)",
         programs: &[
-            "rg", "ripgrep", "fd", "fdfind", "bat", "batcat", "fzf", "jq", "yq", "grep",
-            "egrep", "fgrep", "find", "xargs", "sed", "awk", "tree",
+            "rg", "ripgrep", "fd", "fdfind", "bat", "batcat", "fzf", "jq", "yq", "grep", "egrep",
+            "fgrep", "find", "xargs", "sed", "awk", "tree",
         ],
     },
     CommandGroup {
@@ -129,7 +129,9 @@ static COMMAND_GROUPS: [CommandGroup; 8] = [
     CommandGroup {
         slug: "python-uv",
         summary: "Python 3 interpreter, Astral uv/ruff, and pytest runners",
-        programs: &["python3", "python", "uv", "uvx", "pip", "pytest", "ruff", "mypy"],
+        programs: &[
+            "python3", "python", "uv", "uvx", "pip", "pytest", "ruff", "mypy",
+        ],
     },
     CommandGroup {
         slug: "node-web",
@@ -334,9 +336,7 @@ pub fn apply_allowed_binary_to_profile(profile: &mut CordonProfile, prog: &str) 
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or(denied.as_str());
-        !candidates
-            .iter()
-            .any(|c| c == denied || c == denied_name)
+        !candidates.iter().any(|c| c == denied || c == denied_name)
     });
 
     if let Some(resolved) = resolve_host_binary(prog) {
@@ -387,7 +387,9 @@ pub fn apply_directory_group_to_profile(
         None => (trimmed, None),
     };
     let group = get_directory_group(slug)?;
-    let is_rw = writable_override.or(inline_mode).unwrap_or(group.default_writable);
+    let is_rw = writable_override
+        .or(inline_mode)
+        .unwrap_or(group.default_writable);
     let mut added = Vec::with_capacity(group.paths.len());
     for &raw_path in group.paths {
         let expanded = expand_tilde(raw_path);
@@ -447,11 +449,19 @@ mod tests {
         let mut prof = get_profile("ai-agent")?;
         let readonly_paths = apply_directory_group_to_profile(&mut prof, "xdg-config", None)?;
         assert_eq!(readonly_paths.len(), 4);
-        assert!(prof.extra_ro_binds.iter().any(|p| p.ends_with(".config/bat")));
+        assert!(
+            prof.extra_ro_binds
+                .iter()
+                .any(|p| p.ends_with(".config/bat"))
+        );
 
         let writable_paths = apply_directory_group_to_profile(&mut prof, "xdg-config:rw", None)?;
         assert_eq!(writable_paths.len(), 4);
-        assert!(prof.extra_rw_binds.iter().any(|p| p.ends_with(".config/bat")));
+        assert!(
+            prof.extra_rw_binds
+                .iter()
+                .any(|p| p.ends_with(".config/bat"))
+        );
         Ok(())
     }
 }

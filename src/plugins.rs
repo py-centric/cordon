@@ -93,10 +93,7 @@ pub fn builtin_cordon_hud_plugin() -> CordonPlugin {
     aliases.insert("py".to_owned(), "./configs/Cordonfile.python".to_owned());
     aliases.insert("airgap".to_owned(), "net airgap".to_owned());
     aliases.insert("hostnet".to_owned(), "net direct".to_owned());
-    aliases.insert(
-        "bat-rg".to_owned(),
-        "allow-group search-tools".to_owned(),
-    );
+    aliases.insert("bat-rg".to_owned(), "allow-group search-tools".to_owned());
 
     CordonPlugin {
         name: "cordon-hud".to_owned(),
@@ -173,16 +170,11 @@ fn plugin_search_roots(
 ) -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if let Ok(home) = std::env::var("HOME") {
-        let home_cordon = PathBuf::from(format!(
-            "{}/.config/cordon",
-            home.trim_end_matches('/')
-        ));
+        let home_cordon = PathBuf::from(format!("{}/.config/cordon", home.trim_end_matches('/')));
         roots.push(home_cordon.join("plugins"));
         roots.push(home_cordon);
     }
-    if allow_workspace_plugins
-        && let Some(ws) = workspace_root
-    {
+    if allow_workspace_plugins && let Some(ws) = workspace_root {
         roots.push(ws.join("plugins"));
         roots.push(ws.join("cordon-plugins"));
         roots.push(ws.to_path_buf());
@@ -226,13 +218,8 @@ pub fn resolve_plugin_in(
     workspace_root: &Path,
     allow_workspace_plugins: bool,
 ) -> Result<CordonPlugin, CordonError> {
-    let trimmed = identifier
-        .trim()
-        .trim_matches('"')
-        .trim_matches('\'');
-    let normalized = trimmed
-        .strip_prefix("cordon-plugins/")
-        .unwrap_or(trimmed);
+    let trimmed = identifier.trim().trim_matches('"').trim_matches('\'');
+    let normalized = trimmed.strip_prefix("cordon-plugins/").unwrap_or(trimmed);
 
     // 1. Built-in plugins always win (anti-shadowing, CH-05).
     for builtin in [builtin_cordon_fish_plugin(), builtin_cordon_hud_plugin()] {

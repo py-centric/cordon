@@ -166,6 +166,9 @@ mod tests {
             profile.host_veth_ip
         );
         assert!(joined.contains(&expected));
-        assert!(joined.matches(&expected).count() >= 2, "udp and tcp DNS DNAT");
+        assert!(
+            joined.matches(&expected).count() >= 2,
+            "udp and tcp DNS DNAT"
+        );
     }
 }

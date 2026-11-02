@@ -194,7 +194,10 @@ pub fn loaded_apparmor_profile_names() -> Vec<String> {
         return Vec::new();
     };
     raw.lines()
-        .filter_map(|line| line.split_once(" (").map(|(name, _)| name.trim().to_owned()))
+        .filter_map(|line| {
+            line.split_once(" (")
+                .map(|(name, _)| name.trim().to_owned())
+        })
         .collect()
 }
 
@@ -780,8 +783,10 @@ pub fn prepare_live_execution_argv_with_runtime(
                     if let Ok(canon_dir) = std::fs::canonicalize(&secret_dir)
                         && canon_dir.is_dir()
                     {
-                        filtered_bwrap
-                            .extend(["--tmpfs".to_owned(), canon_dir.to_string_lossy().into_owned()]);
+                        filtered_bwrap.extend([
+                            "--tmpfs".to_owned(),
+                            canon_dir.to_string_lossy().into_owned(),
+                        ]);
                     }
                 }
                 for secret_file_rel in [
@@ -930,9 +935,9 @@ pub fn run_doctor_checks() -> DoctorReport {
     });
 
     let loaded_profiles = loaded_apparmor_profile_names();
-    let attachable_profile = loaded_profiles.iter().find(|name| {
-        name.as_str() == AGENT_SHELL_APPARMOR_PROFILE || name.starts_with("cordon_")
-    });
+    let attachable_profile = loaded_profiles
+        .iter()
+        .find(|name| name.as_str() == AGENT_SHELL_APPARMOR_PROFILE || name.starts_with("cordon_"));
     checks.push(DoctorCheck {
         name: "apparmor_confinement".to_owned(),
         passed: aa_exec_present && attachable_profile.is_some(),
@@ -1166,19 +1171,20 @@ mod tests {
         let Ok(profile) = crate::profiles::get_profile("ai-agent") else {
             panic!("ai-agent profile missing");
         };
-        let Ok(plan) = compile_launch_plan(&profile, Path::new("."), &["true".to_owned()], &[], &[])
+        let Ok(plan) =
+            compile_launch_plan(&profile, Path::new("."), &["true".to_owned()], &[], &[])
         else {
             panic!("compile_launch_plan failed");
         };
-        let gate2 = plan
-            .gates_applied
-            .iter()
-            .find(|g| g.starts_with("Gate 2"));
+        let gate2 = plan.gates_applied.iter().find(|g| g.starts_with("Gate 2"));
         let gate2 = gate2.map(String::as_str).unwrap_or_default();
         assert!(!gate2.is_empty(), "Gate 2 entry must always report status");
         let attached = plan.full_argv.iter().any(|a| a == "aa-exec");
         if attached {
-            assert!(gate2.contains("aa-exec"), "applied gate must name the wrapper");
+            assert!(
+                gate2.contains("aa-exec"),
+                "applied gate must name the wrapper"
+            );
         } else {
             assert!(
                 gate2.contains("not applied"),
@@ -1200,17 +1206,22 @@ mod tests {
             "/run/docker.sock",
             "/var/run/docker.sock",
         ] {
-            assert!(paths.contains(&expected), "missing socket mask for {expected}");
+            assert!(
+                paths.contains(&expected),
+                "missing socket mask for {expected}"
+            );
         }
     }
 
     #[test]
     fn doctor_reports_confinement_status() {
         let report = run_doctor_checks();
-        assert!(report
-            .checks
-            .iter()
-            .any(|c| c.name == "apparmor_confinement" && !c.required));
+        assert!(
+            report
+                .checks
+                .iter()
+                .any(|c| c.name == "apparmor_confinement" && !c.required)
+        );
         assert!(report.checks.iter().any(|c| c.name == "apparmor_aa_exec"));
     }
 }

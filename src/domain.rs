@@ -334,8 +334,7 @@ pub const AUDIT_EVENT_DASHBOARD_KEYS: &[&str] = &[
 ];
 
 /// `details` map keys the dashboard derives its Target and Rule columns from.
-pub const AUDIT_DETAIL_DASHBOARD_KEYS: &[&str] =
-    &[audit_json::DETAIL_URL, audit_json::DETAIL_RULE];
+pub const AUDIT_DETAIL_DASHBOARD_KEYS: &[&str] = &[audit_json::DETAIL_URL, audit_json::DETAIL_RULE];
 
 /// Single diagnostic check result from `cordon doctor`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

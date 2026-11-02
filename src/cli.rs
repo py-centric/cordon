@@ -605,11 +605,7 @@ pub async fn execute_cli(cli: CordonCli) -> Result<i32> {
         Commands::Plugin { action } => match action {
             PluginSubcommand::List => {
                 let plugins = list_available_plugins_with_workspace(cli.allow_workspace_plugins);
-                log_stderr_diagnostic(
-                    "INFO",
-                    "plugin.list",
-                    &format!("count={}", plugins.len()),
-                );
+                log_stderr_diagnostic("INFO", "plugin.list", &format!("count={}", plugins.len()));
                 if cli.json {
                     println!(
                         "{}",

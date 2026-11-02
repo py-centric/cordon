@@ -558,13 +558,19 @@ impl CordonEnvironmentConfig {
                 cfg.mask_binaries
                     .extend(arr.into_iter().map(|p| expand_tilde(&p)));
             }
-            ("security" | "filesystem" | "groups" | "sandbox" | "", "allowed_binaries" | "allow_bins") => {
+            (
+                "security" | "filesystem" | "groups" | "sandbox" | "",
+                "allowed_binaries" | "allow_bins",
+            ) => {
                 cfg.allowed_binaries.extend(arr);
             }
             ("security" | "groups" | "sandbox" | "", "command_groups" | "allow_groups") => {
                 cfg.command_groups.extend(arr);
             }
-            ("mounts" | "filesystem" | "groups" | "sandbox" | "", "directory_groups" | "mount_groups") => {
+            (
+                "mounts" | "filesystem" | "groups" | "sandbox" | "",
+                "directory_groups" | "mount_groups",
+            ) => {
                 cfg.directory_groups.extend(arr);
             }
             ("plugins" | "sandbox" | "", "plugins" | "enabled") => {
@@ -765,8 +771,11 @@ impl CordonEnvironmentConfig {
                 .map(|s| format!("\"{s}\""))
                 .collect();
             let _ = writeln!(out, "mask_binaries = [{}]", masked_quotes.join(", "));
-            let masked_dir_quotes: Vec<String> =
-                self.masked_dirs.iter().map(|s| format!("\"{s}\"")).collect();
+            let masked_dir_quotes: Vec<String> = self
+                .masked_dirs
+                .iter()
+                .map(|s| format!("\"{s}\""))
+                .collect();
             let _ = writeln!(out, "masked_dirs = [{}]", masked_dir_quotes.join(", "));
         }
 
@@ -972,7 +981,9 @@ impl CordonEnvironmentConfig {
             }
             plan.bwrap_argv.splice(split_pos..split_pos, env_flags);
             let mut full = plan.netns_exec_argv.clone();
-            full.extend(crate::sandbox::aa_exec_confinement_prefix(&plan.profile_name));
+            full.extend(crate::sandbox::aa_exec_confinement_prefix(
+                &plan.profile_name,
+            ));
             full.extend(plan.bwrap_argv.clone());
             plan.full_argv = full;
         }

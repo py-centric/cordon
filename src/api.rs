@@ -182,9 +182,7 @@ impl MetaResponse {
             service: "pycentric-cordon".to_owned(),
             version: version.to_owned(),
             licence: "AGPL-3.0-only".to_owned(),
-            corresponding_source: format!(
-                "https://github.com/pycentric/cordon/tree/v{version}"
-            ),
+            corresponding_source: format!("https://github.com/pycentric/cordon/tree/v{version}"),
         }
     }
 }
@@ -439,7 +437,9 @@ impl CordonControlPlane {
 impl AuditSinkPort for CordonControlPlane {
     fn record_event(&self, event: AuditEvent) {
         let Ok(mut guard) = self.events.lock() else {
-            tracing::warn!("audit ring buffer lock poisoned; dropping event (control plane degraded)");
+            tracing::warn!(
+                "audit ring buffer lock poisoned; dropping event (control plane degraded)"
+            );
             return;
         };
 
@@ -462,7 +462,10 @@ impl AuditSinkPort for CordonControlPlane {
             let mut details = BTreeMap::new();
             details.insert("reason".to_owned(), AUDIT_RING_EVICTED_REASON.to_owned());
             details.insert("evicted_total".to_owned(), total.to_string());
-            details.insert("ring_capacity".to_owned(), MAX_RING_BUFFER_EVENTS.to_string());
+            details.insert(
+                "ring_capacity".to_owned(),
+                MAX_RING_BUFFER_EVENTS.to_string(),
+            );
             guard.push_back(AuditEvent {
                 event_id: Uuid::new_v4().to_string(),
                 timestamp: Utc::now().to_rfc3339(),
@@ -598,10 +601,7 @@ fn is_allowed_host(host_value: &str, bound_authority: Option<&str>) -> bool {
             return true;
         }
     }
-    matches!(
-        authority_hostname(&host),
-        "127.0.0.1" | "localhost" | "::1"
-    )
+    matches!(authority_hostname(&host), "127.0.0.1" | "localhost" | "::1")
 }
 
 /// Returns `true` when `path` is an authenticated API route (all of `/api/v1/*`).
@@ -645,12 +645,7 @@ fn problem_response(problem: &Rfc7807ProblemDetails) -> Response {
     response
 }
 
-fn middleware_rejection(
-    status: StatusCode,
-    title: &str,
-    detail: &str,
-    req: &Request,
-) -> Response {
+fn middleware_rejection(status: StatusCode, title: &str, detail: &str, req: &Request) -> Response {
     let trace_id = extract_trace_id(req.headers());
     problem_response(&Rfc7807ProblemDetails::from_status(
         status.as_u16(),
@@ -669,10 +664,7 @@ async fn security_headers_middleware(req: Request, next: Next) -> Response {
         header::X_CONTENT_TYPE_OPTIONS,
         HeaderValue::from_static("nosniff"),
     );
-    headers.insert(
-        header::X_FRAME_OPTIONS,
-        HeaderValue::from_static("DENY"),
-    );
+    headers.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
     headers.insert(
         header::REFERRER_POLICY,
         HeaderValue::from_static("no-referrer"),
@@ -708,7 +700,11 @@ async fn host_guard_middleware(
 }
 
 /// Requires a constant-time verified `Authorization: Bearer` token on `/api/v1/*` when configured.
-async fn auth_middleware(State(auth_token): State<Option<String>>, req: Request, next: Next) -> Response {
+async fn auth_middleware(
+    State(auth_token): State<Option<String>>,
+    req: Request,
+    next: Next,
+) -> Response {
     if let Some(expected) = auth_token.as_deref()
         && api_route_requires_auth(req.uri().path())
     {
@@ -719,8 +715,8 @@ async fn auth_middleware(State(auth_token): State<Option<String>>, req: Request,
             .and_then(|v| v.split_once(' '))
             .filter(|(scheme, _)| scheme.eq_ignore_ascii_case("bearer"))
             .map(|(_, token)| token);
-        let valid = provided
-            .is_some_and(|token| constant_time_eq(token.as_bytes(), expected.as_bytes()));
+        let valid =
+            provided.is_some_and(|token| constant_time_eq(token.as_bytes(), expected.as_bytes()));
         if !valid {
             return middleware_rejection(
                 StatusCode::UNAUTHORIZED,
@@ -850,10 +846,7 @@ async fn handle_profiles() -> Json<ProfilesResponse> {
     })
 }
 
-async fn handle_profile(
-    AxumPath(profile_slug): AxumPath<String>,
-    headers: HeaderMap,
-) -> Response {
+async fn handle_profile(AxumPath(profile_slug): AxumPath<String>, headers: HeaderMap) -> Response {
     let trace_id = extract_trace_id(&headers);
     match get_profile(&profile_slug) {
         Ok(profile) => attach_common_headers(Json(profile).into_response(), &headers, &trace_id),
@@ -956,7 +949,10 @@ pub fn build_router(state: CordonControlPlane) -> Router {
 ///
 /// Middleware chain (outermost first): security headers -> host guard -> bearer auth ->
 /// body limits -> POST rate limit -> routes. Layer calls below are applied innermost-first.
-pub fn build_router_with_options(state: CordonControlPlane, options: ControlPlaneOptions) -> Router {
+pub fn build_router_with_options(
+    state: CordonControlPlane,
+    options: ControlPlaneOptions,
+) -> Router {
     let rate_limiter = Arc::new(RateLimiter::new(RATE_LIMIT_POSTS_PER_MINUTE));
     Router::new()
         .route("/", get(handle_dashboard))

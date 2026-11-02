@@ -16,7 +16,7 @@ use crate::config::{
 };
 use crate::domain::SandboxLaunchPlan;
 use crate::groups::{
-     get_command_group, get_directory_group, list_command_groups, list_directory_groups,
+    get_command_group, get_directory_group, list_command_groups, list_directory_groups,
     resolve_host_binary,
 };
 use crate::l7_policy::CordonPolicyEvaluator;
@@ -169,7 +169,10 @@ impl ReplSession {
 
     /// Disables a plugin by name.
     pub fn disable_plugin(&mut self, name: &str) -> bool {
-        let normalized = name.trim().strip_prefix("cordon-plugins/").unwrap_or(name.trim());
+        let normalized = name
+            .trim()
+            .strip_prefix("cordon-plugins/")
+            .unwrap_or(name.trim());
         let before = self.active_plugins.len();
         self.active_plugins
             .retain(|p| !p.name.eq_ignore_ascii_case(normalized));
@@ -554,12 +557,16 @@ fn handle_repl_line<W: Write>(session: &mut ReplSession, line: &str, out: &mut W
             writeln!(
                 out,
                 "Config File:      {}",
-                ts(&session.config_path.as_ref().map_or_else(
-                    || "(none)".to_owned(),
-                    |p| p.display().to_string()
-                ))
+                ts(&session
+                    .config_path
+                    .as_ref()
+                    .map_or_else(|| "(none)".to_owned(), |p| p.display().to_string()))
             )?;
-            writeln!(out, "Workspace:        {}", ts(&session.workspace.display().to_string()))?;
+            writeln!(
+                out,
+                "Workspace:        {}",
+                ts(&session.workspace.display().to_string())
+            )?;
             writeln!(out, "Network Mode:     {}", session.net_mode.as_str())?;
             writeln!(out, "Command Groups:   {:?}", session.command_groups)?;
             writeln!(out, "Allowed Binaries: {:?}", session.allowed_binaries)?;
@@ -589,15 +596,17 @@ fn handle_repl_line<W: Write>(session: &mut ReplSession, line: &str, out: &mut W
         "groups" => write_groups_summary(out)?,
         "allow-bin" | "expose-bin" => {
             if args.is_empty() {
-                writeln!(out, "Usage: allow-bin <prog1> [prog2...] (e.g. allow-bin bat rg fd jq)")?;
+                writeln!(
+                    out,
+                    "Usage: allow-bin <prog1> [prog2...] (e.g. allow-bin bat rg fd jq)"
+                )?;
             } else {
                 for &prog in args {
                     if !session.allowed_binaries.iter().any(|b| b == prog) {
                         session.allowed_binaries.push(prog.to_owned());
                     }
                     session.masked_binaries.retain(|m| {
-                        Path::new(m).file_name().and_then(|n| n.to_str()) != Some(prog)
-                            && m != prog
+                        Path::new(m).file_name().and_then(|n| n.to_str()) != Some(prog) && m != prog
                     });
                     if let Some(resolved) = resolve_host_binary(prog) {
                         writeln!(
@@ -704,12 +713,7 @@ fn handle_repl_line<W: Write>(session: &mut ReplSession, line: &str, out: &mut W
                     session
                         .aliases
                         .insert(clean_k.to_owned(), clean_v.to_owned());
-                    writeln!(
-                        out,
-                        "Defined alias {}=\"{}\"",
-                        ts(clean_k),
-                        ts(clean_v)
-                    )?;
+                    writeln!(out, "Defined alias {}=\"{}\"", ts(clean_k), ts(clean_v))?;
                 } else {
                     writeln!(out, "Usage: alias [name=command]")?;
                 }
@@ -761,7 +765,11 @@ fn handle_repl_line<W: Write>(session: &mut ReplSession, line: &str, out: &mut W
                 match get_profile(target) {
                     Ok(p) => {
                         session.profile = p.name;
-                        writeln!(out, "Switched active profile to '{}'.", ts(&session.profile))?;
+                        writeln!(
+                            out,
+                            "Switched active profile to '{}'.",
+                            ts(&session.profile)
+                        )?;
                     }
                     Err(e) => writeln!(out, "Error: {}", ts(&e.to_string()))?,
                 }
@@ -879,11 +887,7 @@ fn handle_repl_line<W: Write>(session: &mut ReplSession, line: &str, out: &mut W
                         session.net_mode == ReplNetMode::Airgap,
                         session.net_mode == ReplNetMode::Direct,
                     );
-                    writeln!(
-                        out,
-                        "Gates: {}",
-                        ts(&plan.gates_applied.join(" -> "))
-                    )?;
+                    writeln!(out, "Gates: {}", ts(&plan.gates_applied.join(" -> ")))?;
                     if let Some(msg) = notice {
                         writeln!(out, "Note:  {}", ts(&msg))?;
                     }
@@ -926,12 +930,7 @@ fn handle_repl_line<W: Write>(session: &mut ReplSession, line: &str, out: &mut W
             writeln!(out, "Platform: {}", ts(&report.platform_summary))?;
             for c in &report.checks {
                 let badge = if c.passed { "PASS" } else { "WARN" };
-                writeln!(
-                    out,
-                    "  [{badge}] {:<18} {}",
-                    ts(&c.name),
-                    ts(&c.detail)
-                )?;
+                writeln!(out, "  [{badge}] {:<18} {}", ts(&c.name), ts(&c.detail))?;
             }
         }
         "clear" => {
@@ -997,7 +996,11 @@ fn execute_dot_slash_target<W: Write>(
     };
     let path = PathBuf::from(expand_tilde(target_str));
     if !path.exists() {
-        writeln!(out, "Error: executable config or script '{}' does not exist.", path.display())?;
+        writeln!(
+            out,
+            "Error: executable config or script '{}' does not exist.",
+            path.display()
+        )?;
         return Ok(());
     }
 
@@ -1057,7 +1060,10 @@ fn handle_repl_ls<W: Write>(session: &ReplSession, args: &[&str], out: &mut W) -
     match target {
         "configs" | "cordonfiles" => {
             let configs = discover_cordon_configs();
-            writeln!(out, "Available Executable Cordonfile Configurations (run with ./<path>):")?;
+            writeln!(
+                out,
+                "Available Executable Cordonfile Configurations (run with ./<path>):"
+            )?;
             if configs.is_empty() {
                 writeln!(out, "  (none found in ./ or ./configs)")?;
             } else {
@@ -1078,14 +1084,34 @@ fn handle_repl_ls<W: Write>(session: &ReplSession, args: &[&str], out: &mut W) -
             }
         }
         "mounts" | "dirs" => {
-            writeln!(out, "Active Directory Groups: {:?}", session.directory_groups)?;
-            writeln!(out, "Read-Only Mounts:        {:?}", session.readonly_mounts)?;
-            writeln!(out, "Read-Write Mounts:       {:?}", session.writable_mounts)?;
+            writeln!(
+                out,
+                "Active Directory Groups: {:?}",
+                session.directory_groups
+            )?;
+            writeln!(
+                out,
+                "Read-Only Mounts:        {:?}",
+                session.readonly_mounts
+            )?;
+            writeln!(
+                out,
+                "Read-Write Mounts:       {:?}",
+                session.writable_mounts
+            )?;
         }
         "bins" | "programs" => {
             writeln!(out, "Active Command Groups:   {:?}", session.command_groups)?;
-            writeln!(out, "Allowed Host Binaries:   {:?}", session.allowed_binaries)?;
-            writeln!(out, "Masked Binaries:         {:?}", session.masked_binaries)?;
+            writeln!(
+                out,
+                "Allowed Host Binaries:   {:?}",
+                session.allowed_binaries
+            )?;
+            writeln!(
+                out,
+                "Masked Binaries:         {:?}",
+                session.masked_binaries
+            )?;
         }
         "groups" => write_groups_summary(out)?,
         "plugins" => handle_repl_plugin(&mut session.clone(), &["list"], out)?,
@@ -1093,11 +1119,7 @@ fn handle_repl_ls<W: Write>(session: &ReplSession, args: &[&str], out: &mut W) -
             let expanded = expand_tilde(dir_path);
             match std::fs::read_dir(&expanded) {
                 Ok(entries) => {
-                    writeln!(
-                        out,
-                        "Directory listing for '{}':",
-                        ts(&expanded)
-                    )?;
+                    writeln!(out, "Directory listing for '{}':", ts(&expanded))?;
                     let mut names: Vec<String> = entries
                         .flatten()
                         .map(|e| {
@@ -1128,7 +1150,10 @@ fn handle_repl_ls<W: Write>(session: &ReplSession, args: &[&str], out: &mut W) -
 
 /// Writes a formatted summary of all pre-populated command groups and directory groups.
 pub fn write_groups_summary<W: Write>(out: &mut W) -> Result<()> {
-    writeln!(out, "Pre-Populated Command Groups (enable with 'allow-group <slug>'):")?;
+    writeln!(
+        out,
+        "Pre-Populated Command Groups (enable with 'allow-group <slug>'):"
+    )?;
     for g in list_command_groups() {
         writeln!(
             out,
@@ -1265,17 +1290,20 @@ fn execute_repl_sandbox_cmd<W: Write>(
                 } else {
                     // Non-interactive runs pump child stdout/stderr through the sanitizer so
                     // sandboxed output cannot inject terminal escapes into logs or pipes.
-                    Command::new(program).args(prog_args).output().map(|output| {
-                        let stdout_text = String::from_utf8_lossy(&output.stdout);
-                        if !stdout_text.trim().is_empty() {
-                            let _ = writeln!(out, "{}", sanitize_terminal_text(&stdout_text));
-                        }
-                        let stderr_text = String::from_utf8_lossy(&output.stderr);
-                        if !stderr_text.trim().is_empty() {
-                            let _ = writeln!(out, "{}", sanitize_terminal_text(&stderr_text));
-                        }
-                        output.status.code().unwrap_or(1)
-                    })
+                    Command::new(program)
+                        .args(prog_args)
+                        .output()
+                        .map(|output| {
+                            let stdout_text = String::from_utf8_lossy(&output.stdout);
+                            if !stdout_text.trim().is_empty() {
+                                let _ = writeln!(out, "{}", sanitize_terminal_text(&stdout_text));
+                            }
+                            let stderr_text = String::from_utf8_lossy(&output.stderr);
+                            if !stderr_text.trim().is_empty() {
+                                let _ = writeln!(out, "{}", sanitize_terminal_text(&stderr_text));
+                            }
+                            output.status.code().unwrap_or(1)
+                        })
                 };
                 match spawn_result {
                     Ok(code) => {

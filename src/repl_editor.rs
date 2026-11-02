@@ -907,7 +907,15 @@ fn classify_argument_token(token: &str) -> &'static str {
         || PLUGIN_CANDIDATES.contains(&token)
         || matches!(
             token,
-            "auto" | "direct" | "airgap" | "netns" | "configs" | "mounts" | "bins" | "groups" | "plugins"
+            "auto"
+                | "direct"
+                | "airgap"
+                | "netns"
+                | "configs"
+                | "mounts"
+                | "bins"
+                | "groups"
+                | "plugins"
         )
     {
         return "\x1b[1;35m";
@@ -979,12 +987,7 @@ pub fn read_interactive_tty_line<W: Write>(
             continue;
         }
 
-        match state.handle_key(
-            key_ev,
-            history,
-            ghost.as_deref(),
-            completion_candidates,
-        ) {
+        match state.handle_key(key_ev, history, ghost.as_deref(), completion_candidates) {
             EditAction::Continue => {}
             EditAction::Submit(line) => {
                 // Redraw final line without ghost text and advance to next line
@@ -1013,11 +1016,7 @@ pub fn read_interactive_tty_line<W: Write>(
                 return Ok(None);
             }
             EditAction::ClearScreen => {
-                crossterm::queue!(
-                    out,
-                    terminal::Clear(ClearType::All),
-                    cursor::MoveTo(0, 0)
-                )?;
+                crossterm::queue!(out, terminal::Clear(ClearType::All), cursor::MoveTo(0, 0))?;
                 out.flush()?;
             }
         }
@@ -1075,10 +1074,8 @@ mod tests {
 
     #[test]
     fn history_store_persists_searches_and_suggests_fish_ghost() {
-        let tmp_path = std::env::temp_dir().join(format!(
-            "cordon_hist_test_{}.txt",
-            std::process::id()
-        ));
+        let tmp_path =
+            std::env::temp_dir().join(format!("cordon_hist_test_{}.txt", std::process::id()));
         let _ = std::fs::remove_file(&tmp_path);
 
         let mut store = HistoryStore::new(Some(tmp_path.clone()));

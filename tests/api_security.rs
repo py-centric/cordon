@@ -4,7 +4,7 @@
 use std::net::SocketAddr;
 
 use cordon::api::{
-    CordonControlPlane, ControlPlaneOptions, DASHBOARD_CSP, EVALUATE_L7_BODY_LIMIT_BYTES,
+    ControlPlaneOptions, CordonControlPlane, DASHBOARD_CSP, EVALUATE_L7_BODY_LIMIT_BYTES,
     MAX_REQUEST_BODY_BYTES, build_router_with_options,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -101,15 +101,18 @@ async fn test_host_header_validation_rejects_foreign_hosts() {
         );
     }
 
-    for good_host in ["localhost", "127.0.0.1", "127.0.0.1:8095", "[::1]", "[::1]:8095"] {
-        let req =
-            format!("GET /api/v1/profiles HTTP/1.1\r\nHost: {good_host}\r\nConnection: close\r\n\r\n");
-        let resp = send_raw(addr, &req).await;
-        assert_eq!(
-            status_of(&resp),
-            200,
-            "Host '{good_host}' must be accepted"
+    for good_host in [
+        "localhost",
+        "127.0.0.1",
+        "127.0.0.1:8095",
+        "[::1]",
+        "[::1]:8095",
+    ] {
+        let req = format!(
+            "GET /api/v1/profiles HTTP/1.1\r\nHost: {good_host}\r\nConnection: close\r\n\r\n"
         );
+        let resp = send_raw(addr, &req).await;
+        assert_eq!(status_of(&resp), 200, "Host '{good_host}' must be accepted");
     }
 
     // The explicitly bound authority is accepted verbatim (any hostname it declares).
@@ -118,7 +121,8 @@ async fn test_host_header_validation_rejects_foreign_hosts() {
         bound_authority: Some("cordon.internal:8095".to_owned()),
     })
     .await;
-    let req = "GET /api/v1/profiles HTTP/1.1\r\nHost: cordon.internal:8095\r\nConnection: close\r\n\r\n";
+    let req =
+        "GET /api/v1/profiles HTTP/1.1\r\nHost: cordon.internal:8095\r\nConnection: close\r\n\r\n";
     let resp = send_raw(addr2, req).await;
     assert_eq!(status_of(&resp), 200, "bound authority must be accepted");
 }
@@ -138,18 +142,23 @@ async fn test_bearer_token_enforced_on_api_routes() {
     let resp = send_raw(addr, &get_request("/api/v1/events?limit=5", "")).await;
     assert_eq!(status_of(&resp), 401);
     assert!(
-        header_of(&resp, "content-type")
-            .is_some_and(|ct| ct.contains("application/problem+json")),
+        header_of(&resp, "content-type").is_some_and(|ct| ct.contains("application/problem+json")),
         "401 must be an RFC 7807 problem document"
     );
 
     // Wrong token -> 401.
-    let wrong = get_request("/api/v1/events?limit=5", "Authorization: Bearer wrong-token\r\n");
+    let wrong = get_request(
+        "/api/v1/events?limit=5",
+        "Authorization: Bearer wrong-token\r\n",
+    );
     let resp = send_raw(addr, &wrong).await;
     assert_eq!(status_of(&resp), 401);
 
     // Malformed scheme -> 401.
-    let malformed = get_request("/api/v1/events?limit=5", "Authorization: Basic dXNlcg==\r\n");
+    let malformed = get_request(
+        "/api/v1/events?limit=5",
+        "Authorization: Basic dXNlcg==\r\n",
+    );
     let resp = send_raw(addr, &malformed).await;
     assert_eq!(status_of(&resp), 401);
 
@@ -166,7 +175,12 @@ async fn test_bearer_token_enforced_on_api_routes() {
     assert_eq!(status_of(&resp), 401);
 
     // Health probes stay unauthenticated for load balancers and schedulers.
-    for probe in ["/healthz", "/health", "/health/liveness", "/health/readiness"] {
+    for probe in [
+        "/healthz",
+        "/health",
+        "/health/liveness",
+        "/health/readiness",
+    ] {
         let resp = send_raw(addr, &get_request(probe, "")).await;
         assert_eq!(
             status_of(&resp),
@@ -218,7 +232,10 @@ async fn test_security_headers_and_strict_csp_on_all_responses() {
             !csp.contains("script-src 'self' 'unsafe-inline'"),
             "script-src must not allow unsafe-inline on {path}: {csp}"
         );
-        assert!(csp.contains("frame-ancestors 'none'"), "CSP on {path}: {csp}");
+        assert!(
+            csp.contains("frame-ancestors 'none'"),
+            "CSP on {path}: {csp}"
+        );
     }
 
     // The dashboard shell loads its behavior from the same-origin /app.js route.
@@ -226,9 +243,11 @@ async fn test_security_headers_and_strict_csp_on_all_responses() {
     assert!(body_of(&dash).contains("src=\"/app.js\""));
     let js = send_raw(addr, &get_request("/app.js", "")).await;
     assert_eq!(status_of(&js), 200);
-    assert!(header_of(&js, "content-type")
-        .is_some_and(|ct| ct.contains("application/javascript")));
-    assert!(body_of(&js).contains("const EVK ="), "EVK key map must be injected");
+    assert!(header_of(&js, "content-type").is_some_and(|ct| ct.contains("application/javascript")));
+    assert!(
+        body_of(&js).contains("const EVK ="),
+        "EVK key map must be injected"
+    );
     assert!(
         DASHBOARD_CSP.contains("default-src 'self'"),
         "CSP constant sanity"
@@ -240,7 +259,10 @@ async fn test_security_headers_and_strict_csp_on_all_responses() {
 async fn test_global_body_limit_rejects_oversized_payloads() {
     let addr = spawn_server(ControlPlaneOptions::default()).await;
 
-    let big_body = format!("{{\"profile\":\"ai-agent\",\"workspace\":\".\",\"command\":[\"{}\"]}}", "a".repeat(MAX_REQUEST_BODY_BYTES));
+    let big_body = format!(
+        "{{\"profile\":\"ai-agent\",\"workspace\":\".\",\"command\":[\"{}\"]}}",
+        "a".repeat(MAX_REQUEST_BODY_BYTES)
+    );
     let req = post_json_request("/api/v1/compile", &big_body);
     let resp = send_raw(addr, &req).await;
     assert_eq!(
@@ -310,7 +332,11 @@ async fn test_post_rate_limit_returns_429_after_burst() {
     // Read-only routes are not rate limited by the POST budget.
     for _ in 0..40 {
         let resp = send_raw(addr, &get_request("/api/v1/profiles", "")).await;
-        assert_eq!(status_of(&resp), 200, "GET routes must not consume POST budget");
+        assert_eq!(
+            status_of(&resp),
+            200,
+            "GET routes must not consume POST budget"
+        );
     }
 }
 
@@ -339,8 +365,10 @@ async fn test_problem_details_are_path_free() {
     for (expected_status, req) in cases {
         let resp = send_raw(addr, &req).await;
         assert_eq!(status_of(&resp), expected_status);
-        assert!(header_of(&resp, "content-type")
-            .is_some_and(|ct| ct.contains("application/problem+json")));
+        assert!(
+            header_of(&resp, "content-type")
+                .is_some_and(|ct| ct.contains("application/problem+json"))
+        );
         let body = body_of(&resp);
         let parsed: serde_json::Value = match serde_json::from_str(body) {
             Ok(v) => v,
@@ -361,7 +389,9 @@ async fn test_problem_details_are_path_free() {
         );
         // The correlation id remains available for server-side log lookup.
         assert!(
-            parsed.get("trace_id").is_some_and(|t| !t.as_str().unwrap_or_default().is_empty()),
+            parsed
+                .get("trace_id")
+                .is_some_and(|t| !t.as_str().unwrap_or_default().is_empty()),
             "problem must include a trace id for correlation"
         );
     }

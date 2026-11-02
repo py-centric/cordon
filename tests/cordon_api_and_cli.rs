@@ -776,7 +776,10 @@ fn test_dashboard_audit_event_serde_contract() {
         audit_json::DETAIL_URL.to_owned(),
         "https://api.openai.com/v1/chat/completions".to_owned(),
     );
-    details.insert(audit_json::DETAIL_RULE.to_owned(), "ALLOW_DOMAIN".to_owned());
+    details.insert(
+        audit_json::DETAIL_RULE.to_owned(),
+        "ALLOW_DOMAIN".to_owned(),
+    );
     let event = AuditEvent {
         event_id: "e-1".to_owned(),
         timestamp: "2026-10-31T00:00:00+00:00".to_owned(),

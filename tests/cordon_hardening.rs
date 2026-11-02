@@ -13,13 +13,13 @@ use cordon::apparmor::{
 use cordon::config::{CordonEnvironmentConfig, RESERVED_ENV_KEYS, expand_tilde};
 use cordon::domain::CanonicalPath;
 use cordon::error::CordonError;
+use cordon::network::generate_network_setup_commands;
 use cordon::plugins::{list_available_plugins_in, resolve_plugin_in};
 use cordon::profiles::get_profile;
 use cordon::sandbox::{
     SocketMaskKind, compile_launch_plan, is_unsafe_writable_path, prepare_live_execution_argv,
     prepare_live_execution_argv_with_runtime, run_doctor_checks, unix_socket_mask_candidates,
 };
-use cordon::network::generate_network_setup_commands;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -129,13 +129,23 @@ fn ch01_compile_rejects_unsafe_rw_mounts_with_422_error() {
         panic!("ai-agent profile missing");
     };
     let cmd = vec!["true".to_owned()];
-    for bad in ["/etc/cron.d", "/usr/local", "/root/X", "/var", "/run", "/opt"] {
+    for bad in [
+        "/etc/cron.d",
+        "/usr/local",
+        "/root/X",
+        "/var",
+        "/run",
+        "/opt",
+    ] {
         let result = compile_launch_plan(&profile, Path::new("."), &cmd, &[], &[bad.to_owned()]);
         match result {
             Err(err @ CordonError::UnsafeWorkspaceMount { .. }) => {
                 assert_eq!(err.to_problem_details("/api/v1/run", "test").status, 422);
             }
-            other => panic!("expected UnsafeWorkspaceMount for {bad}, got {:?}", other.err()),
+            other => panic!(
+                "expected UnsafeWorkspaceMount for {bad}, got {:?}",
+                other.err()
+            ),
         }
     }
 }
@@ -163,7 +173,8 @@ fn ch01_home_projects_workspace_still_compiles_rw() {
 
 #[test]
 fn ch02_mask_dir_emits_tmpfs_after_all_binds() {
-    let cf = "FROM ai-agent\nNAME mask-test\nWORKDIR .\nMASK_DIR /opt/agent-masked\nCMD [\"true\"]\n";
+    let cf =
+        "FROM ai-agent\nNAME mask-test\nWORKDIR .\nMASK_DIR /opt/agent-masked\nCMD [\"true\"]\n";
     let Ok(cfg) = CordonEnvironmentConfig::from_cordonfile_str(cf) else {
         panic!("Cordonfile with MASK_DIR failed to parse");
     };
@@ -199,7 +210,10 @@ fn ch02_mask_dir_emits_tmpfs_after_all_binds() {
     let (Some(mask_idx), Some(chdir)) = (masked_tmpfs_idx, chdir_idx) else {
         panic!("MASK_DIR tmpfs or --chdir missing from bwrap argv");
     };
-    assert!(mask_idx > last_bind_idx, "tmpfs must follow every ro/rw bind");
+    assert!(
+        mask_idx > last_bind_idx,
+        "tmpfs must follow every ro/rw bind"
+    );
     assert!(mask_idx < chdir);
 }
 
@@ -246,7 +260,8 @@ fn ch02_home_secret_mask_dir_expands_tilde() {
 #[test]
 fn ch03_reserved_env_table_rejected_from_config_and_cli() {
     for key in RESERVED_ENV_KEYS {
-        let cf = format!("FROM ai-agent\nNAME env-test\nWORKDIR .\nENV {key}=evil\nCMD [\"true\"]\n");
+        let cf =
+            format!("FROM ai-agent\nNAME env-test\nWORKDIR .\nENV {key}=evil\nCMD [\"true\"]\n");
         let Ok(cfg) = CordonEnvironmentConfig::from_cordonfile_str(&cf) else {
             panic!("Cordonfile with ENV {key} failed to parse");
         };
@@ -255,7 +270,10 @@ fn ch03_reserved_env_table_rejected_from_config_and_cli() {
             Err(CordonError::InvalidInput(msg)) => {
                 assert!(msg.contains(key), "rejection must name key {key}: {msg}");
             }
-            other => panic!("expected InvalidInput for config ENV {key}, got {:?}", other.err()),
+            other => panic!(
+                "expected InvalidInput for config ENV {key}, got {:?}",
+                other.err()
+            ),
         }
 
         let mut cli_env = BTreeMap::new();
@@ -350,16 +368,16 @@ fn ch03_socket_masks_present_in_live_bwrap_argv() {
     }
     for agent_socket in [rt.join("keyring/ssh"), rt.join("gcr/socket")] {
         let dir_target = canon(&agent_socket);
-        let masked = live_argv.windows(2).any(|w| {
-            w[0] == "--tmpfs" && dir_target.starts_with(&w[1])
-        });
-        assert!(masked, "CH-03: agent socket {agent_socket:?} must sit under a tmpfs mask");
+        let masked = live_argv
+            .windows(2)
+            .any(|w| w[0] == "--tmpfs" && dir_target.starts_with(&w[1]));
+        assert!(
+            masked,
+            "CH-03: agent socket {agent_socket:?} must sit under a tmpfs mask"
+        );
     }
     // Masks are mount overlays: they must be emitted before --chdir (mounts complete first).
-    let mask_pos = live_argv
-        .iter()
-        .position(|a| a == "/dev/null")
-        .unwrap_or(0);
+    let mask_pos = live_argv.iter().position(|a| a == "/dev/null").unwrap_or(0);
     let chdir_pos = live_argv
         .iter()
         .position(|a| a == "--chdir")
@@ -583,7 +601,10 @@ fn apparmor_render_rejects_hostile_profile_entries_and_fails_closed() {
         Err(CordonError::InvalidInput(_))
     ));
     let rendered = render_apparmor_profile(&profile, "/usr/local/bin/agent-shell");
-    assert!(!rendered.contains(&hostile), "no DSL injection via infallible path");
+    assert!(
+        !rendered.contains(&hostile),
+        "no DSL injection via infallible path"
+    );
     assert!(rendered.contains("deny /** rwlkmx,"));
 
     let Ok(mut attach_profile) = get_profile("ai-agent") else {
@@ -618,10 +639,7 @@ fn ch08_network_constants_stay_canonical() {
     );
 
     let mitm = build_mitmproxy_command(&profile, "/etc/cordon/addon.py", false);
-    let set_idx = mitm
-        .iter()
-        .position(|a| a == "--set")
-        .unwrap_or(usize::MAX);
+    let set_idx = mitm.iter().position(|a| a == "--set").unwrap_or(usize::MAX);
     assert_eq!(
         mitm.get(set_idx + 1).map(String::as_str),
         Some("stream_large_bodies=5m")
@@ -632,5 +650,8 @@ fn ch08_network_constants_stay_canonical() {
         "--dport 53 -j DNAT --to-destination {}:53",
         profile.host_veth_ip
     );
-    assert!(cmds.contains(&dnat), "DNS DNAT must target the host veth resolver");
+    assert!(
+        cmds.contains(&dnat),
+        "DNS DNAT must target the host veth resolver"
+    );
 }

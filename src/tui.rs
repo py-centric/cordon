@@ -693,10 +693,7 @@ pub fn draw_interactive_tui(frame: &mut Frame<'_>, app: &TuiApp) {
     let events = app.plane.recent_events(TELEMETRY_EVENT_WINDOW);
     let event_items: Vec<ListItem<'_>> = events
         .iter()
-        .skip(
-            app.telemetry_scroll
-                .min(events.len().saturating_sub(1)),
-        )
+        .skip(app.telemetry_scroll.min(events.len().saturating_sub(1)))
         .map(|ev| {
             let color = match ev.verdict {
                 Verdict::Allow => Color::Green,
@@ -831,8 +828,7 @@ fn execute_pending_launch(
                             &format!("shell ({}) -> exit {code}", plan.profile_name),
                             "TUI_SANDBOX_SHELL",
                         );
-                        app.status_message =
-                            format!("Sandbox shell exited with status {code}.");
+                        app.status_message = format!("Sandbox shell exited with status {code}.");
                         if code != 0 {
                             wait_for_enter_to_resume();
                         }
@@ -904,8 +900,10 @@ fn execute_pending_launch(
                         &format!("cmd '{}' -> exit {code}", argv.join(" ")),
                         "TUI_CUSTOM_COMMAND",
                     );
-                    app.status_message =
-                        format!("Command '{}' exited with status {code}.", ts(&argv.join(" ")));
+                    app.status_message = format!(
+                        "Command '{}' exited with status {code}.",
+                        ts(&argv.join(" "))
+                    );
                     wait_for_enter_to_resume();
                 }
                 Ok(())
@@ -955,7 +953,10 @@ fn execute_pending_launch(
     if let Err(ref err) = result {
         app.status_message = format!("Session launch error: {}", ts(&err.to_string()));
         app.record_event(Verdict::Block, &err.to_string(), "TUI_LAUNCH_ERROR");
-        println!("\x1b[1;31m[cordon-tui] Error: {}\x1b[0m", ts(&err.to_string()));
+        println!(
+            "\x1b[1;31m[cordon-tui] Error: {}\x1b[0m",
+            ts(&err.to_string())
+        );
         wait_for_enter_to_resume();
     }
 
@@ -1130,4 +1131,3 @@ pub fn render_tui_snapshot(
     }
     Ok(lines.join("\n"))
 }
-

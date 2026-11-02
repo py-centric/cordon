@@ -367,7 +367,8 @@ fn test_sandbox_isolation_hardening_remediations() {
     let Ok(untrusted_profile) = get_profile("untrusted-code") else {
         panic!("untrusted-code profile missing");
     };
-    let Ok(untrusted_plan) = compile_launch_plan(&untrusted_profile, Path::new("."), &cmd, &[], &[])
+    let Ok(untrusted_plan) =
+        compile_launch_plan(&untrusted_profile, Path::new("."), &cmd, &[], &[])
     else {
         panic!("untrusted compile_launch_plan failed");
     };
@@ -378,10 +379,9 @@ fn test_sandbox_isolation_hardening_remediations() {
             .bwrap_argv
             .windows(2)
             .position(|w| w[0] == "--tmpfs" && w[1] == canon_home.as_str());
-        let bind_ws_pos = untrusted_plan
-            .bwrap_argv
-            .windows(2)
-            .position(|w| w[0] == "--ro-bind" && w[1] == untrusted_plan.canonical_workspace.as_str());
+        let bind_ws_pos = untrusted_plan.bwrap_argv.windows(2).position(|w| {
+            w[0] == "--ro-bind" && w[1] == untrusted_plan.canonical_workspace.as_str()
+        });
         assert!(tmpfs_home_pos.is_some());
         assert!(bind_ws_pos.is_some());
         if let (Some(t_pos), Some(b_pos)) = (tmpfs_home_pos, bind_ws_pos) {
@@ -495,7 +495,10 @@ fn test_interactive_tui_navigation_and_session_launching() {
         &mut app,
         KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE),
     );
-    assert_eq!(app.pending_launch.take(), Some(TuiLaunchAction::SandboxShell));
+    assert_eq!(
+        app.pending_launch.take(),
+        Some(TuiLaunchAction::SandboxShell)
+    );
 
     handle_tui_key_event(
         &mut app,
@@ -576,5 +579,3 @@ fn test_interactive_tui_navigation_and_session_launching() {
         }
     }
 }
-
-
