@@ -170,7 +170,7 @@ Guest to host: `{"v":1,"event":"ready"}`, then `{"v":1,"event":"exit","code":0}`
 - **Firecracker:** hybrid vsock UDS. The host writes `CONNECT 1024\n`; the guest listens on vsock port 1024.
 - **QEMU:** `virtserialport name=org.cordon.ctl` backed by `-chardev socket,path=...`. There is no vhost-vsock, so no host-global CID and no `/dev/vhost-vsock`.
 
-The socket lives under `/run/cordon/vm/<run-id>/` on the host and is bind-mounted to the fixed path `/run/cordon-vm/` inside bwrap. The plan is therefore path-stable, which snapshots need.
+All VMM sockets live in `/tmp/cordon-vm/` on the Bubblewrap `/tmp` tmpfs: private to the sandbox, never on the host filesystem, and at a fixed path, which snapshots need.
 
 Known limitation: terminal resize (SIGWINCH) is not propagated in v1. The follow-up is a `resize` frame.
 
@@ -180,19 +180,19 @@ Inside the bwrap tail, the plan runs a small Cordon supervisor subcommand (`cord
 
 **QEMU (`virtio-fs-live`), representative argv:**
 ```
-virtiofsd --socket-path=/run/cordon-vm/fs.sock --shared-dir=/ --sandbox=none --cache=auto --announce-submounts
+virtiofsd --socket-path=/tmp/cordon-vm/fs.sock --shared-dir=/ --sandbox=none --cache=auto --announce-submounts
 qemu-system-x86_64 -M microvm,x-option-roms=off,pit=off,pic=off,isa-serial=on,rtc=off
   -enable-kvm -cpu host -smp <vcpus> -m <mib> -nodefaults -no-user-config -nographic -no-reboot
   -object memory-backend-memfd,id=mem,size=<mib>M,share=on -numa node,memdev=mem
   -kernel <kernel> -append "console=ttyS0 quiet reboot=t panic=-1 rootfstype=virtiofs root=cordonroot init=/cordon-guest-init"
-  -chardev socket,id=fs0,path=/run/cordon-vm/fs.sock -device vhost-user-fs-device,chardev=fs0,tag=cordonroot
+  -chardev socket,id=fs0,path=/tmp/cordon-vm/fs.sock -device vhost-user-fs-device,chardev=fs0,tag=cordonroot
   -netdev tap,id=n0,ifname=tcvm<N>,script=no,downscript=no -device virtio-net-device,netdev=n0   # omitted when fail-closed
-  -device virtio-serial-device -chardev socket,id=ctl,path=/run/cordon-vm/ctl.sock,server=on,wait=off
+  -device virtio-serial-device -chardev socket,id=ctl,path=/tmp/cordon-vm/ctl.sock,server=on,wait=off
   -device virtserialport,chardev=ctl,name=org.cordon.ctl -serial stdio
 ```
 virtiofsd uses `--sandbox=none` because bwrap already provides the namespaces and nested userns may be blocked. It exports `/` **as seen inside bwrap**, so the guest gets the same filesystem policy as a native run. A guest-root write to `.git/hooks` fails with `EROFS` (TV-VM-01). `cordon-guest-init` itself comes from a read-only bind of the installed binary.
 
-**Firecracker:** the supervisor runs `firecracker --api-sock /run/cordon-vm/api.sock --level Warning`, then calls `PUT /machine-config`, `/boot-source`, `/drives/rootfs` (RO base), `/drives/overlay` (when `btrfs-cow-overlay`), `/drives/workspace` (RO packed image), `/network-interfaces/eth0` (`host_dev_name: tcvm<N>`, omitted when fail-closed), `/vsock` (`uds_path`), `/entropy`, and finally `PUT /actions {"action_type":"InstanceStart"}`. Rate limits map to token buckets with explicit units:
+**Firecracker:** the supervisor runs `firecracker --api-sock /tmp/cordon-vm/api.sock --level Warning`, then calls `PUT /machine-config`, `/boot-source`, `/drives/rootfs` (RO base), `/drives/overlay` (when `btrfs-cow-overlay`), `/drives/workspace` (RO packed image), `/network-interfaces/eth0` (`host_dev_name: tcvm<N>`, omitted when fail-closed), `/vsock` (`uds_path`), `/entropy`, and finally `PUT /actions {"action_type":"InstanceStart"}`. Rate limits map to token buckets with explicit units:
 
 | Field | Firecracker bucket |
 |---|---|
@@ -200,7 +200,7 @@ virtiofsd uses `--sandbox=none` because bwrap already provides the namespaces an
 | `disk_iops = I` | `ops: {size: I, refill_time: 1000}` |
 | `net_bandwidth_mbit_s = M` | `bandwidth: {size: M*125000, refill_time: 1000}` on rx and tx |
 
-**Sealed workspace (block modes):** inside Gate 3, the workspace is packed into a read-only image under `/var/lib/cordon/run/<run-id>/` with `mkfs.erofs`, or `mke2fs -d` when that is not installed. Size is capped (default 2 GiB, `--vm-workspace-cap`). The image is deleted on exit. Output write-back is out of scope for v1.
+**Sealed workspace (block modes):** inside Gate 3, the workspace is packed into a read-only image at `/tmp/cordon-vm/workspace.img` with `mkfs.erofs`, or `mke2fs -d` when that is not installed. Size is capped (default 2 GiB, `--vm-workspace-cap`), and the image is always padded to the cap so its virtio-blk capacity is constant, which snapshot restore requires. The image is deleted on exit. Output write-back is out of scope for v1.
 
 **No `jailer`:** bwrap, AppArmor and Firecracker's built-in seccomp filters cover its role. cgroup v2 CPU and memory caps are a follow-up.
 
@@ -261,12 +261,10 @@ Unknown keys are errors, never silently ignored. Both formats round-trip through
 ```
 /dev/kvm rw,
 /dev/net/tun rw,
-/run/cordon-vm/** rw,
-/var/lib/cordon/kernels/** r,
-/var/lib/cordon/images/** r,
 /var/lib/cordon/run/** rwk,
 /var/lib/cordon/snapshots/** rwk,
 ```
+Kernel and rootfs images are covered by the base `/** r` rule, and the runtime sockets by the base `/tmp/** rwkl` rule.
 The base (non-VM) profiles gain an explicit `deny /dev/kvm rw,`. The existing `deny capability net_admin` / `sys_admin` stay. A persistent user-owned tap needs neither. Entry validation and the fail-closed deny-all fallback still apply.
 
 ## 12. Tests

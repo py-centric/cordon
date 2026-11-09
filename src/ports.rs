@@ -2,7 +2,10 @@
 
 use std::path::Path;
 
-use crate::domain::{AuditEvent, CordonProfile, DoctorReport, PolicyDecision, SandboxLaunchPlan};
+use crate::domain::{
+    AuditEvent, CordonProfile, DoctorReport, MicroVmCompileContext, MicroVmExecutionPlan,
+    MicroVmSpec, PolicyDecision, SandboxLaunchPlan,
+};
 use crate::error::CordonError;
 
 /// Driver port for querying workload isolation profiles.
@@ -28,6 +31,17 @@ pub trait SandboxCompilerPort: Send + Sync {
 
     /// Executes host toolchain and Linux kernel LSM diagnostic checks.
     fn run_doctor_checks(&self) -> DoctorReport;
+}
+
+/// Driven port for compiling Gate 3.5 MicroVM plans (VMM argv / Firecracker API payloads and the
+/// guest command envelope) executed *inside* the Gate 1-3 [`SandboxLaunchPlan`].
+pub trait MicroVmCompilerPort: Send + Sync {
+    /// Compiles a deterministic [`MicroVmExecutionPlan`] for a validated [`MicroVmSpec`].
+    fn compile_microvm_plan(
+        &self,
+        spec: &MicroVmSpec,
+        ctx: &MicroVmCompileContext,
+    ) -> Result<MicroVmExecutionPlan, CordonError>;
 }
 
 /// Driven port for generating AppArmor 4.0 Mandatory Access Control profiles.

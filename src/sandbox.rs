@@ -230,6 +230,26 @@ pub fn aa_exec_confinement_prefix(profile_name: &str) -> Vec<String> {
     }
 }
 
+/// Builds the `aa-exec -p cordon_<slug>_microvm --` prefix for Gate 3.5 launches, or an empty
+/// vector when that profile is not loaded. The non-VM profiles deliberately deny `/dev/kvm`, so
+/// there is no fallback to `cordon_<slug>` or `agent_shell` here.
+pub fn aa_exec_microvm_confinement_prefix(profile_name: &str) -> Vec<String> {
+    if find_binary_on_path("aa-exec").is_none() {
+        return Vec::new();
+    }
+    let target = format!("{}_microvm", rendered_apparmor_profile_name(profile_name));
+    if loaded_apparmor_profile_names().contains(&target) {
+        vec![
+            "aa-exec".to_owned(),
+            "-p".to_owned(),
+            target,
+            "--".to_owned(),
+        ]
+    } else {
+        Vec::new()
+    }
+}
+
 /// Mask overlay strategy for a host Unix socket that must be unreachable inside the sandbox (CH-03).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SocketMaskKind {
@@ -592,6 +612,7 @@ pub fn compile_launch_plan_with_masks(
         gates_applied,
         network_mode: profile.network_mode,
         filesystem_mode: profile.filesystem_mode,
+        microvm: None,
     })
 }
 
