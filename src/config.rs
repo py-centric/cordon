@@ -1174,7 +1174,8 @@ impl CordonEnvironmentConfig {
         allow_reserved_env: bool,
     ) -> Result<(CordonProfile, SandboxLaunchPlan), CordonError> {
         let mut profile = self.build_profile()?;
-        if let Some(spec) = self.microvm_spec()? {
+        let microvm = self.microvm_spec()?;
+        if let Some(ref spec) = microvm {
             spec.validate_for_profile(&profile)?;
         }
         for ro in readonly_mounts {
@@ -1236,6 +1237,13 @@ impl CordonEnvironmentConfig {
             ));
             full.extend(plan.bwrap_argv.clone());
             plan.full_argv = full;
+        }
+
+        // Gate 3.5 last: it wraps the final Gate 3 tail (including merged env) in the VMM
+        // supervisor and re-attaches the MicroVM AppArmor profile.
+        if let Some(ref spec) = microvm {
+            let run_id = uuid::Uuid::new_v4().simple().to_string();
+            crate::microvm::attach_microvm_plan(&mut plan, &profile, spec, &run_id)?;
         }
 
         Ok((profile, plan))

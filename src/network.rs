@@ -1,6 +1,6 @@
 //! Linux Network Namespace (`ip netns`), `veth`, and `iptables` compiler for Cordon.
 
-use crate::domain::CordonProfile;
+use crate::domain::{CordonProfile, TapSlot};
 use crate::ports::NetnsCompilerPort;
 
 /// Generates idempotent shell commands to provision the isolated network namespace,
@@ -72,6 +72,58 @@ pub fn generate_network_setup_commands(profile: &CordonProfile) -> Vec<String> {
             .to_owned(),
     );
 
+    cmds
+}
+
+/// Generates idempotent commands provisioning the Gate 3.5 MicroVM tap pool inside the profile's
+/// network namespace: persistent user-owned `tcvm<n>` taps (opened by the VMM without
+/// `CAP_NET_ADMIN`), one `/30` per slot in `10.200.255.0/24`, MASQUERADE to the sandbox veth so the
+/// host Gate 4/5 rules apply unchanged, and fail-closed FORWARD/INPUT rules (no guest-to-guest or
+/// guest-to-netns traffic).
+pub fn generate_microvm_tap_commands(
+    profile: &CordonProfile,
+    pool_size: u8,
+    owner_uid: u32,
+) -> Vec<String> {
+    let ns = &profile.netns_name;
+    let supernet = TapSlot::SUPERNET;
+    let mut cmds = Vec::new();
+    for index in 0..pool_size.min(TapSlot::MAX_POOL) {
+        let Ok(slot) = TapSlot::new(index) else {
+            continue;
+        };
+        let dev = slot.device();
+        cmds.push(format!(
+            "ip netns exec {ns} ip tuntap add dev {dev} mode tap user {owner_uid} 2>/dev/null || true"
+        ));
+        cmds.push(format!(
+            "ip netns exec {ns} ip addr replace {}/30 dev {dev}",
+            slot.gateway()
+        ));
+        cmds.push(format!("ip netns exec {ns} ip link set {dev} up"));
+    }
+    cmds.push(format!(
+        "ip netns exec {ns} sysctl -w net.ipv4.ip_forward=1 >/dev/null"
+    ));
+    let rules = [
+        format!("-t nat POSTROUTING -s {supernet} -o veth-agent -j MASQUERADE"),
+        "FORWARD -i tcvm+ -o veth-agent -j ACCEPT".to_owned(),
+        "FORWARD -i veth-agent -o tcvm+ -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT"
+            .to_owned(),
+        "FORWARD -j DROP".to_owned(),
+        "INPUT -i tcvm+ -j DROP".to_owned(),
+    ];
+    for rule in rules {
+        let (table, chain_rule) = rule
+            .strip_prefix("-t nat ")
+            .map_or(("", rule.as_str()), |r| ("-t nat ", r));
+        cmds.push(format!(
+            "ip netns exec {ns} iptables {table}-C {chain_rule} 2>/dev/null || ip netns exec {ns} iptables {table}-A {chain_rule}"
+        ));
+    }
+    cmds.push(format!(
+        "ip netns exec {ns} ip6tables -C FORWARD -j DROP 2>/dev/null || ip netns exec {ns} ip6tables -A FORWARD -j DROP"
+    ));
     cmds
 }
 
@@ -169,6 +221,38 @@ mod tests {
         assert!(
             joined.matches(&expected).count() >= 2,
             "udp and tcp DNS DNAT"
+        );
+    }
+
+    #[test]
+    fn microvm_tap_pool_is_isolated_and_masqueraded_inside_the_netns() {
+        let Ok(profile) = get_profile("untrusted-code") else {
+            panic!("profile missing");
+        };
+        let cmds = generate_microvm_tap_commands(&profile, 2, 1000);
+        let joined = cmds.join("\n");
+        let ns = &profile.netns_name;
+        assert!(joined.contains(&format!(
+            "ip netns exec {ns} ip tuntap add dev tcvm0 mode tap user 1000"
+        )));
+        assert!(joined.contains("ip addr replace 10.200.255.5/30 dev tcvm1"));
+        assert!(!joined.contains("tcvm2"));
+        assert!(
+            joined.contains("-t nat -A POSTROUTING -s 10.200.255.0/24 -o veth-agent -j MASQUERADE")
+        );
+        assert!(joined.contains("iptables -A FORWARD -j DROP"));
+        assert!(joined.contains("iptables -A INPUT -i tcvm+ -j DROP"));
+        assert!(joined.contains("ip6tables -A FORWARD -j DROP"));
+        assert!(
+            !joined.contains(&profile.subnet_cidr),
+            "tap pool must not reuse the veth subnet"
+        );
+        assert_eq!(
+            generate_microvm_tap_commands(&profile, 200, 0)
+                .iter()
+                .filter(|c| c.contains("tuntap add"))
+                .count(),
+            16
         );
     }
 }
