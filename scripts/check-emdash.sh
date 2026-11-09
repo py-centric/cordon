@@ -25,6 +25,7 @@ TARGETS=(
   docs/PRD.md
   docs/QUICKSTART.md
   docs/OPERATIONS_AND_WORKLOAD_GUIDE.md
+  docs/design
   docs/adr/ADR-L0-SEC-02.md
   docs/newsletter/post-your-ai-agent-runs-as-you.php
 )

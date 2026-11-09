@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::num::{NonZeroU8, NonZeroU32};
 use std::path::{Path, PathBuf};
 
 use clap::ValueEnum;
@@ -358,4 +359,951 @@ pub struct DoctorReport {
     pub platform_summary: String,
     /// Individual dependency and kernel checks.
     pub checks: Vec<DoctorCheck>,
+}
+
+// ---------------------------------------------------------------------------------------------
+// Gate 3.5: optional KVM MicroVM isolation plane (see docs/design/microvm-isolation.md).
+// ---------------------------------------------------------------------------------------------
+
+/// Isolation backend executing the workload inside Gates 1-3.
+///
+/// Wire names are explicit (not derived) so the JSON/TOML/CLI vocabulary is stable and shared
+/// with the Python reference stack.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default, ValueEnum)]
+pub enum IsolationBackend {
+    /// Native Bubblewrap process isolation on the host kernel (no MicroVM).
+    #[default]
+    #[serde(rename = "native-bwrap")]
+    #[value(name = "native-bwrap")]
+    NativeBwrap,
+    /// QEMU `-M microvm` with a virtiofsd-exported live workspace.
+    #[serde(rename = "qemu-microvm")]
+    #[value(name = "qemu-microvm")]
+    QemuMicrovm,
+    /// Firecracker sealed block-device MicroVM with optional snapshot restore.
+    #[serde(rename = "firecracker")]
+    #[value(name = "firecracker")]
+    Firecracker,
+    /// libkrun-based MicroVM (reserved: accepted by the schema, rejected by the compiler until a
+    /// launcher is selected).
+    #[serde(rename = "krun")]
+    #[value(name = "krun")]
+    Krun,
+}
+
+impl IsolationBackend {
+    /// Stable wire name (`native-bwrap`, `qemu-microvm`, `firecracker`, `krun`).
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::NativeBwrap => "native-bwrap",
+            Self::QemuMicrovm => "qemu-microvm",
+            Self::Firecracker => "firecracker",
+            Self::Krun => "krun",
+        }
+    }
+
+    /// Returns `true` for every backend that boots a guest kernel through `/dev/kvm`.
+    pub const fn is_microvm(self) -> bool {
+        !matches!(self, Self::NativeBwrap)
+    }
+
+    /// Disk modes supported by this backend (VM-INV-1). Empty for `native-bwrap`.
+    pub const fn supported_disk_modes(self) -> &'static [VmDiskMode] {
+        match self {
+            Self::NativeBwrap => &[],
+            Self::QemuMicrovm => &[
+                VmDiskMode::VirtioFsLive,
+                VmDiskMode::EphemeralTmpfs,
+                VmDiskMode::BtrfsCowOverlay,
+            ],
+            Self::Firecracker => &[
+                VmDiskMode::EphemeralTmpfs,
+                VmDiskMode::BtrfsCowOverlay,
+                VmDiskMode::SnapshotRestore,
+            ],
+            Self::Krun => &[VmDiskMode::VirtioFsLive],
+        }
+    }
+
+    /// Default disk mode applied when a spec omits `disk_mode`.
+    pub const fn default_disk_mode(self) -> Option<VmDiskMode> {
+        match self {
+            Self::NativeBwrap => None,
+            Self::QemuMicrovm | Self::Krun => Some(VmDiskMode::VirtioFsLive),
+            Self::Firecracker => Some(VmDiskMode::EphemeralTmpfs),
+        }
+    }
+}
+
+impl fmt::Display for IsolationBackend {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Guest root/workspace storage strategy for a MicroVM.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub enum VmDiskMode {
+    /// Live host view exported through virtio-fs (QEMU/krun only; Firecracker has no virtio-fs).
+    VirtioFsLive,
+    /// Read-only base image with a guest RAM (tmpfs) overlay, discarded on exit.
+    EphemeralTmpfs,
+    /// Instant Btrfs reflink clone of an ext4 base image, attached read-write, deleted on exit.
+    BtrfsCowOverlay,
+    /// Warm memory + device state restore from a named snapshot (Firecracker only).
+    SnapshotRestore,
+}
+
+impl VmDiskMode {
+    /// Stable wire name (`virtio-fs-live`, `ephemeral-tmpfs`, `btrfs-cow-overlay`, `snapshot-restore`).
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::VirtioFsLive => "virtio-fs-live",
+            Self::EphemeralTmpfs => "ephemeral-tmpfs",
+            Self::BtrfsCowOverlay => "btrfs-cow-overlay",
+            Self::SnapshotRestore => "snapshot-restore",
+        }
+    }
+
+    /// Returns `true` when the guest root is a block device (every mode except virtio-fs).
+    pub const fn is_block(self) -> bool {
+        !matches!(self, Self::VirtioFsLive)
+    }
+}
+
+impl fmt::Display for VmDiskMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Deterministic per-VM I/O rate limits. Units are explicit in the field names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VmRateLimits {
+    /// Block device operations per second.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disk_iops: Option<NonZeroU32>,
+    /// Block device bandwidth in MiB per second.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disk_bandwidth_mib_s: Option<NonZeroU32>,
+    /// Network bandwidth in Mbit per second (applied to RX and TX independently).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub net_bandwidth_mbit_s: Option<NonZeroU32>,
+}
+
+impl VmRateLimits {
+    /// Returns `true` when any disk limit is configured.
+    pub const fn has_disk_limits(&self) -> bool {
+        self.disk_iops.is_some() || self.disk_bandwidth_mib_s.is_some()
+    }
+}
+
+/// Kind of MicroVM image, which selects the permitted directory roots.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VmImageKind {
+    /// Guest kernel (`vmlinux` / `bzImage`).
+    Kernel,
+    /// Guest root filesystem image (erofs / ext4).
+    Rootfs,
+}
+
+impl VmImageKind {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Kernel => "kernel_image",
+            Self::Rootfs => "rootfs_image",
+        }
+    }
+
+    /// System-wide directory roots MicroVM images of this kind must reside under.
+    ///
+    /// An allowlist (rather than a denylist) prevents attaching arbitrary user-readable files
+    /// (for example private keys) to the guest as raw block devices.
+    pub const fn system_roots(self) -> &'static [&'static str] {
+        match self {
+            Self::Kernel => &[
+                "/boot",
+                "/var/lib/cordon/kernels",
+                "/usr/lib/cordon/kernels",
+                "/usr/share/cordon/kernels",
+            ],
+            Self::Rootfs => &[
+                "/var/lib/cordon/images",
+                "/usr/lib/cordon/images",
+                "/usr/share/cordon/images",
+            ],
+        }
+    }
+
+    /// Per-user directory root (relative to the canonical `$HOME`).
+    pub const fn user_root(self) -> &'static str {
+        match self {
+            Self::Kernel => ".local/share/cordon/kernels",
+            Self::Rootfs => ".local/share/cordon/images",
+        }
+    }
+}
+
+/// Validated MicroVM kernel or rootfs image path (VM-INV-2).
+///
+/// Guarantees: absolute, lexically normalized, free of `..`, located under an allowlisted image
+/// root, contains no symlink in any existing component, and is a regular file when it exists.
+/// Existence itself is re-verified by the live launcher (images may live on the execution host
+/// rather than the compiling host).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct VmImagePath(String);
+
+impl VmImagePath {
+    /// Validates an image path against the allowlisted roots for `kind`.
+    pub fn new(raw: &str, kind: VmImageKind) -> Result<Self, CordonError> {
+        let home = std::env::var("HOME").ok();
+        Self::new_with_home(raw, kind, home.as_deref())
+    }
+
+    /// [`Self::new`] with an explicit `$HOME` (testable seam).
+    pub fn new_with_home(
+        raw: &str,
+        kind: VmImageKind,
+        home: Option<&str>,
+    ) -> Result<Self, CordonError> {
+        let unsafe_image = |reason: &str| CordonError::UnsafeMicroVmImage {
+            path: raw.to_owned(),
+            reason: format!("{}: {reason}", kind.label()),
+        };
+        let trimmed = raw.trim();
+        let path = Path::new(trimmed);
+        if trimmed.is_empty() || !path.is_absolute() {
+            return Err(unsafe_image("path must be absolute"));
+        }
+        if path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
+            return Err(unsafe_image("path must not contain '..'"));
+        }
+        let lexical = CanonicalPath::normalize_lexical(path);
+
+        let mut roots: Vec<PathBuf> = kind.system_roots().iter().map(PathBuf::from).collect();
+        if let Some(home) = home.filter(|h| !h.trim().is_empty()) {
+            let home_canon = std::fs::canonicalize(home).unwrap_or_else(|_| PathBuf::from(home));
+            roots.push(home_canon.join(kind.user_root()));
+        }
+        if !roots
+            .iter()
+            .any(|root| lexical.starts_with(root) && lexical != *root)
+        {
+            return Err(unsafe_image(
+                "path is outside the allowlisted MicroVM image directories",
+            ));
+        }
+
+        // Symlink check: canonicalizing the longest existing ancestor must not change it.
+        let mut existing = lexical.as_path();
+        while std::fs::symlink_metadata(existing).is_err() {
+            match existing.parent() {
+                Some(parent) => existing = parent,
+                None => break,
+            }
+        }
+        if let Ok(canon) = std::fs::canonicalize(existing)
+            && canon != existing
+        {
+            return Err(unsafe_image("path traverses a symbolic link"));
+        }
+        if let Ok(meta) = std::fs::symlink_metadata(&lexical)
+            && !meta.file_type().is_file()
+        {
+            return Err(unsafe_image("path must be a regular file"));
+        }
+
+        Ok(Self(lexical.to_string_lossy().into_owned()))
+    }
+
+    /// Returns the validated path string.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for VmImagePath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// Validated snapshot slug (`^[a-z0-9][a-z0-9_-]{1,62}$`), resolved by the launcher to
+/// `/var/lib/cordon/snapshots/<name>/`. Users never supply raw memory-dump paths.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct SnapshotName(String);
+
+impl SnapshotName {
+    /// Root directory holding named Firecracker snapshots.
+    pub const ROOT: &'static str = "/var/lib/cordon/snapshots";
+
+    /// Validates a snapshot slug.
+    pub fn new(raw: &str) -> Result<Self, CordonError> {
+        let bytes = raw.as_bytes();
+        let valid_len = (2..=63).contains(&bytes.len());
+        let valid_first = bytes
+            .first()
+            .is_some_and(|b| b.is_ascii_lowercase() || b.is_ascii_digit());
+        let valid_rest = bytes
+            .iter()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-' || *b == b'_');
+        if valid_len && valid_first && valid_rest {
+            Ok(Self(raw.to_owned()))
+        } else {
+            Err(CordonError::InvalidInput(format!(
+                "Invalid snapshot name '{raw}': must match ^[a-z0-9][a-z0-9_-]{{1,62}}$"
+            )))
+        }
+    }
+
+    /// Returns the slug.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Returns the snapshot directory (`/var/lib/cordon/snapshots/<name>`).
+    pub fn directory(&self) -> String {
+        format!("{}/{}", Self::ROOT, self.0)
+    }
+}
+
+impl TryFrom<String> for SnapshotName {
+    type Error = CordonError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new(&value)
+    }
+}
+
+impl From<SnapshotName> for String {
+    fn from(value: SnapshotName) -> Self {
+        value.0
+    }
+}
+
+/// Unvalidated wire representation of a MicroVM spec (`[vm]` table, API `vm` object).
+///
+/// Convert with [`MicroVmSpec::try_from`]; the validated type is the only one the compiler accepts.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RawMicroVmSpec {
+    /// Isolation backend (`native-bwrap` disables the MicroVM plane).
+    #[serde(default)]
+    pub backend: IsolationBackend,
+    /// Guest vCPU count (1..=32, default 2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vcpus: Option<u8>,
+    /// Guest memory in MiB (128..=65536, default 1024).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory_mib: Option<u32>,
+    /// Disk mode (defaults per backend).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disk_mode: Option<VmDiskMode>,
+    /// Guest kernel image path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kernel_image: Option<String>,
+    /// Guest root filesystem image path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rootfs_image: Option<String>,
+    /// Named snapshot (required for, and only valid with, `snapshot-restore`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snapshot: Option<String>,
+    /// Optional I/O rate limits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rate_limits: Option<VmRateLimits>,
+}
+
+/// Validated MicroVM specification (Gate 3.5).
+///
+/// Fields are private and the only constructor is [`TryFrom<RawMicroVmSpec>`] (also used by
+/// serde), so an invalid backend / disk-mode / image combination cannot be represented.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "RawMicroVmSpec", into = "RawMicroVmSpec")]
+pub struct MicroVmSpec {
+    backend: IsolationBackend,
+    vcpus: NonZeroU8,
+    memory_mib: NonZeroU32,
+    disk_mode: VmDiskMode,
+    kernel_image: Option<VmImagePath>,
+    rootfs_image: Option<VmImagePath>,
+    snapshot: Option<SnapshotName>,
+    rate_limits: Option<VmRateLimits>,
+}
+
+impl MicroVmSpec {
+    /// Maximum guest vCPUs (Firecracker limit).
+    pub const MAX_VCPUS: u8 = 32;
+    /// Minimum guest memory in MiB.
+    pub const MIN_MEMORY_MIB: u32 = 128;
+    /// Maximum guest memory in MiB.
+    pub const MAX_MEMORY_MIB: u32 = 65_536;
+    /// Default guest vCPUs.
+    pub const DEFAULT_VCPUS: u8 = 2;
+    /// Default guest memory in MiB.
+    pub const DEFAULT_MEMORY_MIB: u32 = 1024;
+
+    /// Validates a raw spec with an explicit `$HOME` (testable seam for image-root resolution).
+    pub fn from_raw_with_home(
+        raw: &RawMicroVmSpec,
+        home: Option<&str>,
+    ) -> Result<Self, CordonError> {
+        let backend = raw.backend;
+        let Some(default_mode) = backend.default_disk_mode() else {
+            return Err(CordonError::InvalidInput(
+                "MicroVM spec requires a MicroVM backend (qemu-microvm, firecracker, krun); \
+                 native-bwrap means no [vm] section"
+                    .to_owned(),
+            ));
+        };
+        let disk_mode = raw.disk_mode.unwrap_or(default_mode);
+        if !backend.supported_disk_modes().contains(&disk_mode) {
+            return Err(CordonError::IncompatibleVmDiskMode {
+                backend: backend.as_str().to_owned(),
+                disk_mode: disk_mode.as_str().to_owned(),
+            });
+        }
+
+        let vcpus_raw = raw.vcpus.unwrap_or(Self::DEFAULT_VCPUS);
+        let vcpus = NonZeroU8::new(vcpus_raw)
+            .filter(|v| v.get() <= Self::MAX_VCPUS)
+            .ok_or_else(|| {
+                CordonError::InvalidInput(format!(
+                    "vcpus must be between 1 and {}, got {vcpus_raw}",
+                    Self::MAX_VCPUS
+                ))
+            })?;
+        let memory_raw = raw.memory_mib.unwrap_or(Self::DEFAULT_MEMORY_MIB);
+        let memory_mib = NonZeroU32::new(memory_raw)
+            .filter(|m| (Self::MIN_MEMORY_MIB..=Self::MAX_MEMORY_MIB).contains(&m.get()))
+            .ok_or_else(|| {
+                CordonError::InvalidInput(format!(
+                    "memory_mib must be between {} and {}, got {memory_raw}",
+                    Self::MIN_MEMORY_MIB,
+                    Self::MAX_MEMORY_MIB
+                ))
+            })?;
+
+        let kernel_image = raw
+            .kernel_image
+            .as_deref()
+            .map(|p| VmImagePath::new_with_home(p, VmImageKind::Kernel, home))
+            .transpose()?;
+        let rootfs_image = raw
+            .rootfs_image
+            .as_deref()
+            .map(|p| VmImagePath::new_with_home(p, VmImageKind::Rootfs, home))
+            .transpose()?;
+        let snapshot = raw.snapshot.as_deref().map(SnapshotName::new).transpose()?;
+
+        // VM-INV-3: required / forbidden companions per backend and disk mode.
+        match backend {
+            IsolationBackend::Krun if kernel_image.is_some() => {
+                return Err(CordonError::InvalidInput(
+                    "krun uses its bundled kernel; kernel_image is not allowed".to_owned(),
+                ));
+            }
+            IsolationBackend::QemuMicrovm | IsolationBackend::Firecracker
+                if kernel_image.is_none() =>
+            {
+                return Err(CordonError::InvalidInput(format!(
+                    "{backend} requires kernel_image"
+                )));
+            }
+            _ => {}
+        }
+        if disk_mode.is_block()
+            && disk_mode != VmDiskMode::SnapshotRestore
+            && rootfs_image.is_none()
+        {
+            return Err(CordonError::InvalidInput(format!(
+                "disk_mode '{disk_mode}' requires rootfs_image"
+            )));
+        }
+        if disk_mode == VmDiskMode::VirtioFsLive && rootfs_image.is_some() {
+            return Err(CordonError::InvalidInput(
+                "disk_mode 'virtio-fs-live' exports the sandbox view as the guest root; \
+                 rootfs_image is not allowed"
+                    .to_owned(),
+            ));
+        }
+        if disk_mode == VmDiskMode::BtrfsCowOverlay
+            && rootfs_image.as_ref().is_some_and(|p| {
+                !Path::new(p.as_str())
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("ext4"))
+            })
+        {
+            return Err(CordonError::InvalidInput(
+                "disk_mode 'btrfs-cow-overlay' requires a writable ext4 rootfs_image (*.ext4)"
+                    .to_owned(),
+            ));
+        }
+        match (disk_mode == VmDiskMode::SnapshotRestore, snapshot.is_some()) {
+            (true, false) => {
+                return Err(CordonError::InvalidInput(
+                    "disk_mode 'snapshot-restore' requires snapshot".to_owned(),
+                ));
+            }
+            (false, true) => {
+                return Err(CordonError::InvalidInput(
+                    "snapshot is only valid with disk_mode 'snapshot-restore'".to_owned(),
+                ));
+            }
+            _ => {}
+        }
+
+        // VM-INV-5: rate limits each engine can actually enforce.
+        if let Some(limits) = raw.rate_limits.as_ref() {
+            if disk_mode == VmDiskMode::VirtioFsLive && limits.has_disk_limits() {
+                return Err(CordonError::UnsupportedVmOption(
+                    "disk rate limits apply to block devices; not supported with virtio-fs-live"
+                        .to_owned(),
+                ));
+            }
+            if backend == IsolationBackend::QemuMicrovm && limits.net_bandwidth_mbit_s.is_some() {
+                return Err(CordonError::UnsupportedVmOption(
+                    "net_bandwidth_mbit_s is not supported on qemu-microvm".to_owned(),
+                ));
+            }
+        }
+        let rate_limits = raw
+            .rate_limits
+            .filter(|l| l.has_disk_limits() || l.net_bandwidth_mbit_s.is_some());
+
+        Ok(Self {
+            backend,
+            vcpus,
+            memory_mib,
+            disk_mode,
+            kernel_image,
+            rootfs_image,
+            snapshot,
+            rate_limits,
+        })
+    }
+
+    /// Cross-validates this spec against the effective profile (VM-INV-4) and backend
+    /// availability. Called by the plan compiler.
+    pub fn validate_for_profile(&self, profile: &CordonProfile) -> Result<(), CordonError> {
+        if self.backend == IsolationBackend::Krun {
+            return Err(CordonError::UnsupportedVmOption(
+                "krun launcher not selected; use qemu-microvm or firecracker".to_owned(),
+            ));
+        }
+        if profile.network_mode == NetworkMode::Direct {
+            return Err(CordonError::UnsupportedVmOption(
+                "MicroVM backends require network_mode inspected, allowlist_only, or none \
+                 (direct would bypass Gates 4-5)"
+                    .to_owned(),
+            ));
+        }
+        if profile.allow_gui_wayland || profile.allow_x11 || profile.allow_gpu_dri {
+            return Err(CordonError::UnsupportedVmOption(
+                "MicroVM backends do not support GUI or GPU passthrough".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Isolation backend.
+    pub const fn backend(&self) -> IsolationBackend {
+        self.backend
+    }
+    /// Guest vCPUs.
+    pub const fn vcpus(&self) -> NonZeroU8 {
+        self.vcpus
+    }
+    /// Guest memory in MiB.
+    pub const fn memory_mib(&self) -> NonZeroU32 {
+        self.memory_mib
+    }
+    /// Disk mode.
+    pub const fn disk_mode(&self) -> VmDiskMode {
+        self.disk_mode
+    }
+    /// Guest kernel image.
+    pub const fn kernel_image(&self) -> Option<&VmImagePath> {
+        self.kernel_image.as_ref()
+    }
+    /// Guest rootfs image.
+    pub const fn rootfs_image(&self) -> Option<&VmImagePath> {
+        self.rootfs_image.as_ref()
+    }
+    /// Named snapshot.
+    pub const fn snapshot(&self) -> Option<&SnapshotName> {
+        self.snapshot.as_ref()
+    }
+    /// I/O rate limits.
+    pub const fn rate_limits(&self) -> Option<&VmRateLimits> {
+        self.rate_limits.as_ref()
+    }
+}
+
+impl TryFrom<RawMicroVmSpec> for MicroVmSpec {
+    type Error = CordonError;
+    fn try_from(raw: RawMicroVmSpec) -> Result<Self, Self::Error> {
+        let home = std::env::var("HOME").ok();
+        Self::from_raw_with_home(&raw, home.as_deref())
+    }
+}
+
+impl From<MicroVmSpec> for RawMicroVmSpec {
+    fn from(spec: MicroVmSpec) -> Self {
+        Self {
+            backend: spec.backend,
+            vcpus: Some(spec.vcpus.get()),
+            memory_mib: Some(spec.memory_mib.get()),
+            disk_mode: Some(spec.disk_mode),
+            kernel_image: spec.kernel_image.map(|p| p.0),
+            rootfs_image: spec.rootfs_image.map(|p| p.0),
+            snapshot: spec.snapshot.map(String::from),
+            rate_limits: spec.rate_limits,
+        }
+    }
+}
+
+#[cfg(test)]
+mod microvm_tests {
+    use super::*;
+
+    const KERNEL: &str = "/var/lib/cordon/kernels/vmlinux-microvm";
+    const ROOTFS_EROFS: &str = "/var/lib/cordon/images/base.erofs";
+    const ROOTFS_EXT4: &str = "/var/lib/cordon/images/base.ext4";
+
+    fn raw(backend: IsolationBackend, disk_mode: VmDiskMode) -> RawMicroVmSpec {
+        let rootfs = match disk_mode {
+            VmDiskMode::VirtioFsLive | VmDiskMode::SnapshotRestore => None,
+            VmDiskMode::BtrfsCowOverlay => Some(ROOTFS_EXT4.to_owned()),
+            VmDiskMode::EphemeralTmpfs => Some(ROOTFS_EROFS.to_owned()),
+        };
+        RawMicroVmSpec {
+            backend,
+            disk_mode: Some(disk_mode),
+            kernel_image: (backend != IsolationBackend::Krun).then(|| KERNEL.to_owned()),
+            rootfs_image: rootfs,
+            snapshot: (disk_mode == VmDiskMode::SnapshotRestore).then(|| "warm-01".to_owned()),
+            ..RawMicroVmSpec::default()
+        }
+    }
+
+    fn build(raw: &RawMicroVmSpec) -> Result<MicroVmSpec, CordonError> {
+        MicroVmSpec::from_raw_with_home(raw, Some("/home/tester"))
+    }
+
+    const ALL_MODES: [VmDiskMode; 4] = [
+        VmDiskMode::VirtioFsLive,
+        VmDiskMode::EphemeralTmpfs,
+        VmDiskMode::BtrfsCowOverlay,
+        VmDiskMode::SnapshotRestore,
+    ];
+
+    #[test]
+    fn backend_disk_mode_matrix_is_enforced() {
+        for backend in [
+            IsolationBackend::QemuMicrovm,
+            IsolationBackend::Firecracker,
+            IsolationBackend::Krun,
+        ] {
+            for mode in ALL_MODES {
+                let result = build(&raw(backend, mode));
+                let supported = backend.supported_disk_modes().contains(&mode);
+                match result {
+                    Ok(spec) => {
+                        assert!(supported, "{backend}+{mode} must be rejected");
+                        assert_eq!(spec.disk_mode(), mode);
+                    }
+                    Err(CordonError::IncompatibleVmDiskMode { .. }) => {
+                        assert!(!supported, "{backend}+{mode} must be accepted");
+                    }
+                    Err(other) => panic!("{backend}+{mode}: unexpected error {other}"),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn firecracker_rejects_virtio_fs_live() {
+        let err = build(&raw(
+            IsolationBackend::Firecracker,
+            VmDiskMode::VirtioFsLive,
+        ));
+        assert!(matches!(
+            err,
+            Err(CordonError::IncompatibleVmDiskMode { .. })
+        ));
+    }
+
+    #[test]
+    fn native_bwrap_is_not_a_microvm_spec() {
+        let spec = RawMicroVmSpec::default();
+        assert!(matches!(build(&spec), Err(CordonError::InvalidInput(_))));
+    }
+
+    #[test]
+    fn wire_names_are_stable() {
+        let names: Vec<String> = [
+            IsolationBackend::NativeBwrap,
+            IsolationBackend::QemuMicrovm,
+            IsolationBackend::Firecracker,
+            IsolationBackend::Krun,
+        ]
+        .iter()
+        .map(|b| serde_json::to_string(b).unwrap_or_default())
+        .collect();
+        assert_eq!(
+            names,
+            [
+                "\"native-bwrap\"",
+                "\"qemu-microvm\"",
+                "\"firecracker\"",
+                "\"krun\""
+            ]
+        );
+        let modes: Vec<String> = ALL_MODES
+            .iter()
+            .map(|m| serde_json::to_string(m).unwrap_or_default())
+            .collect();
+        assert_eq!(
+            modes,
+            [
+                "\"virtio-fs-live\"",
+                "\"ephemeral-tmpfs\"",
+                "\"btrfs-cow-overlay\"",
+                "\"snapshot-restore\""
+            ]
+        );
+        for b in [IsolationBackend::QemuMicrovm, IsolationBackend::Firecracker] {
+            assert_eq!(
+                format!("\"{b}\""),
+                serde_json::to_string(&b).unwrap_or_default()
+            );
+        }
+    }
+
+    #[test]
+    fn defaults_applied_per_backend() {
+        let mut fc = raw(IsolationBackend::Firecracker, VmDiskMode::EphemeralTmpfs);
+        fc.disk_mode = None;
+        let Ok(spec) = build(&fc) else {
+            panic!("firecracker default spec must validate");
+        };
+        assert_eq!(spec.disk_mode(), VmDiskMode::EphemeralTmpfs);
+        assert_eq!(spec.vcpus().get(), MicroVmSpec::DEFAULT_VCPUS);
+        assert_eq!(spec.memory_mib().get(), MicroVmSpec::DEFAULT_MEMORY_MIB);
+
+        let mut qemu = raw(IsolationBackend::QemuMicrovm, VmDiskMode::VirtioFsLive);
+        qemu.disk_mode = None;
+        assert!(build(&qemu).is_ok_and(|s| s.disk_mode() == VmDiskMode::VirtioFsLive));
+    }
+
+    #[test]
+    fn resource_bounds_are_enforced() {
+        for (vcpus, mem, ok) in [
+            (0_u8, 1024_u32, false),
+            (33, 1024, false),
+            (32, 1024, true),
+            (1, 127, false),
+            (1, 128, true),
+            (1, 65_537, false),
+        ] {
+            let mut r = raw(IsolationBackend::QemuMicrovm, VmDiskMode::VirtioFsLive);
+            r.vcpus = Some(vcpus);
+            r.memory_mib = Some(mem);
+            assert_eq!(build(&r).is_ok(), ok, "vcpus={vcpus} mem={mem}");
+        }
+    }
+
+    #[test]
+    fn image_paths_must_be_under_allowlisted_roots() {
+        let home = Some("/home/tester");
+        for bad in [
+            "relative/vmlinux",
+            "/etc/shadow",
+            "/dev/sda",
+            "/",
+            "/home/tester/.ssh/id_ed25519",
+            "/var/lib/cordon/kernels/../../../etc/passwd",
+            "/var/lib/cordon/kernels",
+            "/var/lib/cordon/images/base.erofs",
+        ] {
+            assert!(
+                matches!(
+                    VmImagePath::new_with_home(bad, VmImageKind::Kernel, home),
+                    Err(CordonError::UnsafeMicroVmImage { .. })
+                ),
+                "{bad} must be rejected as a kernel image"
+            );
+        }
+        for good in [
+            "/boot/vmlinuz-linux",
+            KERNEL,
+            "/home/tester/.local/share/cordon/kernels/vmlinux",
+        ] {
+            assert!(
+                VmImagePath::new_with_home(good, VmImageKind::Kernel, home).is_ok(),
+                "{good} must be accepted"
+            );
+        }
+        assert!(VmImagePath::new_with_home(ROOTFS_EROFS, VmImageKind::Rootfs, home).is_ok());
+        assert!(VmImagePath::new_with_home("/boot/initrd", VmImageKind::Rootfs, home).is_err());
+    }
+
+    #[test]
+    fn image_path_rejects_symlinked_component_and_non_files() {
+        let base = std::env::temp_dir().join(format!("cordon-vm-{}", uuid::Uuid::new_v4()));
+        let home = base.join("home");
+        let kernels = home.join(".local/share/cordon/kernels");
+        let real = base.join("real");
+        assert!(std::fs::create_dir_all(&real).is_ok());
+        assert!(std::fs::create_dir_all(home.join(".local/share/cordon")).is_ok());
+        assert!(std::os::unix::fs::symlink(&real, &kernels).is_ok());
+        assert!(std::fs::write(real.join("vmlinux"), b"k").is_ok());
+        let home_str = home.to_string_lossy().into_owned();
+        let via_link = kernels.join("vmlinux").to_string_lossy().into_owned();
+        assert!(matches!(
+            VmImagePath::new_with_home(&via_link, VmImageKind::Kernel, Some(&home_str)),
+            Err(CordonError::UnsafeMicroVmImage { .. })
+        ));
+
+        assert!(std::fs::remove_file(&kernels).is_ok());
+        assert!(std::fs::create_dir_all(kernels.join("subdir")).is_ok());
+        let dir_path = kernels.join("subdir").to_string_lossy().into_owned();
+        assert!(
+            VmImagePath::new_with_home(&dir_path, VmImageKind::Kernel, Some(&home_str)).is_err()
+        );
+        assert!(std::fs::write(kernels.join("vmlinux"), b"k").is_ok());
+        let file_path = kernels.join("vmlinux").to_string_lossy().into_owned();
+        assert!(
+            VmImagePath::new_with_home(&file_path, VmImageKind::Kernel, Some(&home_str)).is_ok()
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn companion_fields_are_validated() {
+        let mut no_kernel = raw(IsolationBackend::Firecracker, VmDiskMode::EphemeralTmpfs);
+        no_kernel.kernel_image = None;
+        assert!(build(&no_kernel).is_err());
+
+        let mut krun_kernel = raw(IsolationBackend::Krun, VmDiskMode::VirtioFsLive);
+        krun_kernel.kernel_image = Some(KERNEL.to_owned());
+        assert!(build(&krun_kernel).is_err());
+
+        let mut no_rootfs = raw(IsolationBackend::Firecracker, VmDiskMode::EphemeralTmpfs);
+        no_rootfs.rootfs_image = None;
+        assert!(build(&no_rootfs).is_err());
+
+        let mut live_rootfs = raw(IsolationBackend::QemuMicrovm, VmDiskMode::VirtioFsLive);
+        live_rootfs.rootfs_image = Some(ROOTFS_EROFS.to_owned());
+        assert!(build(&live_rootfs).is_err());
+
+        let mut cow_erofs = raw(IsolationBackend::Firecracker, VmDiskMode::BtrfsCowOverlay);
+        cow_erofs.rootfs_image = Some(ROOTFS_EROFS.to_owned());
+        assert!(build(&cow_erofs).is_err());
+
+        let mut no_snap = raw(IsolationBackend::Firecracker, VmDiskMode::SnapshotRestore);
+        no_snap.snapshot = None;
+        assert!(build(&no_snap).is_err());
+
+        let mut stray_snap = raw(IsolationBackend::Firecracker, VmDiskMode::EphemeralTmpfs);
+        stray_snap.snapshot = Some("warm-01".to_owned());
+        assert!(build(&stray_snap).is_err());
+
+        let mut bad_snap = raw(IsolationBackend::Firecracker, VmDiskMode::SnapshotRestore);
+        bad_snap.snapshot = Some("../etc".to_owned());
+        assert!(build(&bad_snap).is_err());
+    }
+
+    #[test]
+    fn rate_limits_are_engine_aware() {
+        let nz = |v: u32| NonZeroU32::new(v);
+        let mut live_disk = raw(IsolationBackend::QemuMicrovm, VmDiskMode::VirtioFsLive);
+        live_disk.rate_limits = Some(VmRateLimits {
+            disk_iops: nz(100),
+            ..VmRateLimits::default()
+        });
+        assert!(matches!(
+            build(&live_disk),
+            Err(CordonError::UnsupportedVmOption(_))
+        ));
+
+        let mut qemu_net = raw(IsolationBackend::QemuMicrovm, VmDiskMode::EphemeralTmpfs);
+        qemu_net.rate_limits = Some(VmRateLimits {
+            net_bandwidth_mbit_s: nz(100),
+            ..VmRateLimits::default()
+        });
+        assert!(matches!(
+            build(&qemu_net),
+            Err(CordonError::UnsupportedVmOption(_))
+        ));
+
+        let mut fc = raw(IsolationBackend::Firecracker, VmDiskMode::EphemeralTmpfs);
+        fc.rate_limits = Some(VmRateLimits {
+            disk_iops: nz(5000),
+            disk_bandwidth_mib_s: nz(250),
+            net_bandwidth_mbit_s: nz(100),
+        });
+        assert!(build(&fc).is_ok_and(|s| s.rate_limits().is_some()));
+
+        let mut empty = raw(IsolationBackend::Firecracker, VmDiskMode::EphemeralTmpfs);
+        empty.rate_limits = Some(VmRateLimits::default());
+        assert!(build(&empty).is_ok_and(|s| s.rate_limits().is_none()));
+    }
+
+    #[test]
+    fn spec_round_trips_through_json_and_rejects_unknown_fields() {
+        let Ok(spec) = build(&raw(
+            IsolationBackend::Firecracker,
+            VmDiskMode::SnapshotRestore,
+        )) else {
+            panic!("snapshot spec must validate");
+        };
+        let json = serde_json::to_string(&spec).unwrap_or_default();
+        let back: Result<MicroVmSpec, _> = serde_json::from_str(&json);
+        assert!(back.is_ok_and(|b| b == spec));
+
+        let bad = r#"{"backend":"firecracker","vsock_cid":3}"#;
+        assert!(serde_json::from_str::<RawMicroVmSpec>(bad).is_err());
+        let invalid = r#"{"backend":"firecracker","disk_mode":"virtio-fs-live","kernel_image":"/boot/vmlinux"}"#;
+        assert!(serde_json::from_str::<MicroVmSpec>(invalid).is_err());
+    }
+
+    #[test]
+    fn profile_cross_validation() {
+        let Ok(spec) = build(&raw(
+            IsolationBackend::QemuMicrovm,
+            VmDiskMode::VirtioFsLive,
+        )) else {
+            panic!("qemu spec must validate");
+        };
+        let Ok(mut profile) = crate::profiles::get_profile("ai-agent") else {
+            panic!("ai-agent profile missing");
+        };
+        assert!(spec.validate_for_profile(&profile).is_ok());
+        profile.network_mode = NetworkMode::Direct;
+        assert!(matches!(
+            spec.validate_for_profile(&profile),
+            Err(CordonError::UnsupportedVmOption(_))
+        ));
+        profile.network_mode = NetworkMode::None;
+        profile.allow_gpu_dri = true;
+        assert!(spec.validate_for_profile(&profile).is_err());
+
+        let Ok(krun) = build(&raw(IsolationBackend::Krun, VmDiskMode::VirtioFsLive)) else {
+            panic!("krun spec must parse (reserved)");
+        };
+        let Ok(plain) = crate::profiles::get_profile("ai-agent") else {
+            panic!("ai-agent profile missing");
+        };
+        assert!(matches!(
+            krun.validate_for_profile(&plain),
+            Err(CordonError::UnsupportedVmOption(_))
+        ));
+    }
 }

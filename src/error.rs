@@ -54,6 +54,33 @@ pub enum CordonError {
     /// JSON serialization or deserialization failure.
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
+
+    /// MicroVM backend does not support the requested disk mode (for example Firecracker has no
+    /// virtio-fs, so `firecracker` + `virtio-fs-live` is rejected).
+    #[error("MicroVM backend '{backend}' does not support disk_mode '{disk_mode}'")]
+    IncompatibleVmDiskMode {
+        /// Backend wire name.
+        backend: String,
+        /// Disk mode wire name.
+        disk_mode: String,
+    },
+
+    /// MicroVM kernel or rootfs image path failed the image allowlist / symlink validation.
+    #[error("Refusing MicroVM image '{path}': {reason}")]
+    UnsafeMicroVmImage {
+        /// Offending path as supplied.
+        path: String,
+        /// Validation failure reason.
+        reason: String,
+    },
+
+    /// MicroVM option is valid in the schema but unsupported for this backend or profile.
+    #[error("Unsupported MicroVM option: {0}")]
+    UnsupportedVmOption(String),
+
+    /// MicroVM runtime prerequisite is unavailable (KVM, tap pool, or VMM binary).
+    #[error("MicroVM unavailable: {0}")]
+    MicroVmUnavailable(String),
 }
 
 /// RFC 7807 compliant problem details payload (`application/problem+json`).
@@ -117,6 +144,18 @@ impl CordonError {
             Self::InvalidInput(_) => "Invalid request payload or parameter (see trace id)",
             Self::Io(_) => "Internal I/O error (see trace id)",
             Self::Serialization(_) => "Request payload serialization failed (see trace id)",
+            Self::IncompatibleVmDiskMode { .. } => {
+                "MicroVM backend does not support the requested disk mode (see trace id)"
+            }
+            Self::UnsafeMicroVmImage { .. } => {
+                "MicroVM image path failed validation (see trace id)"
+            }
+            Self::UnsupportedVmOption(_) => {
+                "MicroVM option is not supported for this backend or profile (see trace id)"
+            }
+            Self::MicroVmUnavailable(_) => {
+                "MicroVM runtime is unavailable on this host (see trace id)"
+            }
         }
     }
 
@@ -131,9 +170,12 @@ impl CordonError {
             | Self::InvalidNetworkConfig(_)
             | Self::InvalidInput(_) => (400_u16, "Bad Request"),
             Self::UnknownProfile { .. } => (404_u16, "Profile Not Found"),
-            Self::PathResolutionFailed { .. } | Self::UnsafeWorkspaceMount { .. } => {
-                (422_u16, "Unprocessable Entity")
-            }
+            Self::PathResolutionFailed { .. }
+            | Self::UnsafeWorkspaceMount { .. }
+            | Self::IncompatibleVmDiskMode { .. }
+            | Self::UnsafeMicroVmImage { .. }
+            | Self::UnsupportedVmOption(_) => (422_u16, "Unprocessable Entity"),
+            Self::MicroVmUnavailable(_) => (503_u16, "Service Unavailable"),
             Self::Io(_) | Self::Serialization(_) => (500_u16, "Internal Server Error"),
         };
 
