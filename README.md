@@ -4,7 +4,7 @@
 > **Open core model in one line:** the engine is AGPL-3.0-only; supported enterprise packages and internal governance docs are proprietary.
 > **Open core licensing.** The Cordon engine is free and open source software under the **GNU Affero General Public License v3 only** (`AGPL-3.0-only`, see [`LICENSE`](LICENSE)). Internal governance/commercial/legal documents, the PyCentric `pc` orchestrator integration, and PyCentric-branded distribution packages (`pycentric-cordon` `.deb`/`.rpm`/tarball/wheel/Flatpak builds) remain proprietary to PyCentric (Pty) Ltd and are **not** covered by the AGPL grant. See [`NOTICE.md`](NOTICE.md) for the full scope map and [`LICENSE-PYCENTRIC.md`](LICENSE-PYCENTRIC.md) for the proprietary terms. "PyCentric", "Cordon", and `pycentric-cordon` are trade marks of PyCentric (Pty) Ltd; no trade mark rights are granted.
 
-**Security-tool evaluators:** Cordon blocks pre-sandbox interpreter hijacking, unsafe root/`$HOME` read-write mounts, in-workspace `.git` hook tampering, and secret or mutating-verb egress to package registries (details in Key Security Invariants below). Run `cordon doctor` (11-point host attestation report; machine-readable via `cordon --json doctor` or `GET /api/v1/doctor`) and read the [Security Threat Model & Disclosure Policy (`SECURITY.md`)](SECURITY.md).
+**Security-tool evaluators:** Cordon blocks pre-sandbox interpreter hijacking, unsafe root/`$HOME` read-write mounts, in-workspace `.git` hook tampering, and secret or mutating-verb egress to package registries (details in Key Security Invariants below). Run `cordon doctor` (15-point host attestation report; machine-readable via `cordon --json doctor` or `GET /api/v1/doctor`) and read the [Security Threat Model & Disclosure Policy (`SECURITY.md`)](SECURITY.md).
 
 **Cordon: zero-unsafe Rust Linux execution sandbox with a reproducible Cordonfile engine and L3-L7 network inspection (netns, AppArmor, bubblewrap, L7 egress policy, PCAP). AGPL-3.0-only.**  
 *Engineered and Governed by PyCentric (`ADR-L0-SEC-02` | [Operations & Workload Guide](docs/OPERATIONS_AND_WORKLOAD_GUIDE.md))*
@@ -190,6 +190,21 @@ cordon run --allow-bin bat --allow-bin rg --allow-group search-tools --mount-gro
 
 ---
 
+### 4.5 Optional Gate 3.5: KVM MicroVM Isolation (preview)
+
+For workloads where a host-kernel exploit is in scope (binary detonation, fuzzing, untrusted root), Cordon can run the workload under a dedicated guest kernel. The VMM itself runs **inside** Gates 1-3, so guest traffic still passes through the L7 policy and PCAP gates, and live-workspace guests inherit the read-only `.git` protection. Two engines are planned: QEMU `-M microvm` (live workspace over virtio-fs) and Firecracker (sealed block images, snapshot restore).
+
+This release ships the compile-time plane: validation, `[vm]` / `VM_*` config, `--vm-*` flags, the `vm` field on `POST /api/v1/compile`, AppArmor (`render-apparmor --microvm`) and tap-pool (`render-netns --microvm`) rendering, and doctor probes. Review plans with `--dry-run` or `inspect-cmd`; live MicroVM launch exits with code 69 until the guest agent ships.
+
+```bash
+cordon run --dry-run -p untrusted-code -w /tmp/sample \
+  --vm-backend firecracker \
+  --vm-kernel /var/lib/cordon/kernels/vmlinux-microvm \
+  --vm-rootfs /var/lib/cordon/images/alpine-audit.erofs -- ./sample
+```
+
+Design, threat model, and roadmap: [`docs/design/microvm-isolation.md`](docs/design/microvm-isolation.md).
+
 ## 5. Packaging, Distribution & Shell Completions (`dist/` & `packaging/`)
 
 Cordon ships with a reproducible packaging pipeline ([`scripts/package-dist.sh`](scripts/package-dist.sh) and [`packaging/`](packaging)) supporting standalone Linux tarballs, Debian/Ubuntu `.deb`, Fedora/RHEL `.rpm`, `AppImage`, `Flatpak`, `systemd` service units, and native **Bash**, **Zsh**, and **Fish** shell completions ([`packaging/completions/`](packaging/completions)):
@@ -276,7 +291,7 @@ If `AGPL-3.0-only` is blocked by your procurement or distribution policy (for ex
 | `GET` | `/metrics` | Prometheus metrics (`cordon_profiles_total`, `cordon_audit_events_buffered`, `cordon_audit_events_blocked_total`) |
 | `GET` | `/api/v1/profiles` | List all 6 universal workload profiles |
 | `GET` | `/api/v1/templates` | List all built-in reproducible `Cordonfile` / `Cordonfile.toml` starter templates |
-| `GET` | `/api/v1/doctor` | 11-point host kernel LSM, sandbox binary, and live gate-confinement diagnostic report (7 toolchain binaries + `kernel_apparmor_lsm` + `apparmor_aa_exec` + `apparmor_confinement` + `kernel_tiocsti_disabled`) |
+| `GET` | `/api/v1/doctor` | 15-point host kernel LSM, sandbox binary, and live gate-confinement diagnostic report (7 toolchain binaries + `kernel_apparmor_lsm` + `apparmor_aa_exec` + `apparmor_confinement` + `kernel_tiocsti_disabled` + non-required MicroVM readiness: `kvm_device_accessible`, `tun_device_accessible`, `microvm_vmm_binaries`, `btrfs_reflink_support`) |
 | `GET` | `/api/v1/apparmor/{profile}` | Render AppArmor 4.0 MAC policy for `{profile}` |
 | `GET` | `/api/v1/network/{profile}` | Render `ip netns` and `iptables` commands for `{profile}` |
 | `GET` | `/api/v1/events?limit=50` | Retrieve recent structured audit telemetry events |

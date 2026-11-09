@@ -12,17 +12,20 @@ use clap::{CommandFactory, Parser, Subcommand, ValueHint};
 use clap_complete::{Shell, generate};
 
 use crate::api::{CordonControlPlane, serve_control_plane};
-use crate::apparmor::try_render_apparmor_profile;
+use crate::apparmor::{try_render_apparmor_microvm_profile, try_render_apparmor_profile};
 use crate::config::{
     CordonEnvironmentConfig, RESERVED_ENV_KEYS, expand_tilde, get_config_template,
     list_config_templates, parse_env_assignment, parse_volume_spec,
 };
-use crate::domain::{SandboxLaunchPlan, Verdict};
+use crate::domain::{
+    IsolationBackend, RawMicroVmSpec, SandboxLaunchPlan, TapSlot, Verdict, VmDiskMode,
+};
+use crate::error::CordonError;
 use crate::groups::{
     COMMAND_GROUP_CANDIDATES, list_command_group_infos, list_directory_group_infos,
 };
 use crate::l7_policy::CordonPolicyEvaluator;
-use crate::network::generate_network_setup_commands;
+use crate::network::{generate_microvm_tap_commands, generate_network_setup_commands};
 use crate::plugins::{
     PLUGIN_CANDIDATES, list_available_plugins_with_workspace, resolve_plugin_with_policy,
 };
@@ -133,6 +136,111 @@ pub enum PluginSubcommand {
 }
 
 /// Supported CLI subcommands.
+/// Gate 3.5 MicroVM flags shared by `run` and `inspect-cmd`. Any flag enables the MicroVM plane
+/// and overrides the matching `[vm]` / `VM_*` setting of a loaded config.
+#[derive(Debug, Clone, Default, clap::Args)]
+pub struct VmCliArgs {
+    /// MicroVM isolation backend (`qemu-microvm`, `firecracker`; `native-bwrap` disables it).
+    #[arg(long = "vm-backend", value_enum)]
+    pub vm_backend: Option<IsolationBackend>,
+    /// Guest vCPUs (1-32).
+    #[arg(long = "vm-vcpus")]
+    pub vm_vcpus: Option<u8>,
+    /// Guest memory in MiB (128-65536).
+    #[arg(long = "vm-memory")]
+    pub vm_memory: Option<u32>,
+    /// Guest disk mode (`virtio-fs-live`, `ephemeral-tmpfs`, `btrfs-cow-overlay`, `snapshot-restore`).
+    #[arg(long = "vm-disk-mode", value_enum)]
+    pub vm_disk_mode: Option<VmDiskMode>,
+    /// Guest kernel image (under `/boot`, `/var/lib/cordon/kernels`, or `~/.local/share/cordon/kernels`).
+    #[arg(long = "vm-kernel", value_hint = ValueHint::FilePath)]
+    pub vm_kernel: Option<String>,
+    /// Guest root filesystem image (under `/var/lib/cordon/images` or `~/.local/share/cordon/images`).
+    #[arg(long = "vm-rootfs", value_hint = ValueHint::FilePath)]
+    pub vm_rootfs: Option<String>,
+    /// Named Firecracker snapshot to restore (implies `--vm-disk-mode snapshot-restore`).
+    #[arg(long = "vm-snapshot")]
+    pub vm_snapshot: Option<String>,
+}
+
+impl VmCliArgs {
+    /// Returns `true` when any MicroVM flag was passed.
+    pub const fn is_set(&self) -> bool {
+        self.vm_backend.is_some()
+            || self.vm_vcpus.is_some()
+            || self.vm_memory.is_some()
+            || self.vm_disk_mode.is_some()
+            || self.vm_kernel.is_some()
+            || self.vm_rootfs.is_some()
+            || self.vm_snapshot.is_some()
+    }
+
+    /// Overlays these flags onto the config's raw `[vm]` settings.
+    pub fn apply_to(&self, cfg: &mut CordonEnvironmentConfig) {
+        if !self.is_set() {
+            return;
+        }
+        let vm = cfg.vm.get_or_insert_with(RawMicroVmSpec::default);
+        if let Some(backend) = self.vm_backend {
+            vm.backend = backend;
+        }
+        if let Some(vcpus) = self.vm_vcpus {
+            vm.vcpus = Some(vcpus);
+        }
+        if let Some(memory) = self.vm_memory {
+            vm.memory_mib = Some(memory);
+        }
+        if let Some(ref kernel) = self.vm_kernel {
+            vm.kernel_image = Some(expand_tilde(kernel));
+        }
+        if let Some(ref rootfs) = self.vm_rootfs {
+            vm.rootfs_image = Some(expand_tilde(rootfs));
+        }
+        if let Some(ref snapshot) = self.vm_snapshot {
+            vm.snapshot = Some(snapshot.clone());
+            vm.disk_mode = Some(VmDiskMode::SnapshotRestore);
+        }
+        if let Some(mode) = self.vm_disk_mode {
+            vm.disk_mode = Some(mode);
+        }
+    }
+}
+
+/// Gate 3.5 MicroVM subcommands.
+#[derive(Debug, Subcommand)]
+pub enum VmSubcommand {
+    /// Internal: Gate 3.5 supervisor executed inside the Bubblewrap tail of a MicroVM plan.
+    #[command(hide = true)]
+    Supervise {
+        /// Validated MicroVM spec (JSON).
+        #[arg(long = "spec-json")]
+        spec_json: String,
+        /// Run identifier.
+        #[arg(long = "run-id")]
+        run_id: String,
+        /// Tap selection (`auto` or `none`).
+        #[arg(long, default_value = "none")]
+        tap: String,
+        /// Comma-separated environment keys forwarded into the guest.
+        #[arg(long = "forward-env", default_value = "")]
+        forward_env: String,
+        /// Guest command.
+        #[arg(num_args = 0.., trailing_var_arg = true, allow_hyphen_values = true)]
+        argv: Vec<String>,
+    },
+}
+
+/// Refuses live execution of MicroVM plans until the guest agent and supervisor ship
+/// (`--dry-run`, `inspect-cmd`, and the API compile plans normally).
+fn ensure_live_launch_supported(plan: &SandboxLaunchPlan) -> Result<(), CordonError> {
+    if plan.microvm.is_some() {
+        return Err(CordonError::MicroVmUnavailable(
+            "live MicroVM launch is not available in this build yet; use --dry-run or inspect-cmd to review the Gate 3.5 plan".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Debug, Subcommand)]
 pub enum Commands {
     /// Compile and execute (or dry-run) any command or `Cordonfile` inside the 5-gate Cordon sandbox.
@@ -188,6 +296,9 @@ pub enum Commands {
         /// Force direct host network namespace inside Bubblewrap (bypassing `ip netns exec`).
         #[arg(long = "host-net")]
         host_net: bool,
+        /// Gate 3.5 MicroVM options.
+        #[command(flatten)]
+        vm: VmCliArgs,
         /// Compile and print the 5-gate execution plan without spawning the child process.
         #[arg(long)]
         dry_run: bool,
@@ -346,6 +457,9 @@ pub enum Commands {
         /// Additional environment variables (`KEY=VALUE`) injected into the sandbox.
         #[arg(short = 'e', long = "env")]
         envs: Vec<String>,
+        /// Gate 3.5 MicroVM options.
+        #[command(flatten)]
+        vm: VmCliArgs,
         /// Target command and arguments (optional if `--config` defines `CMD`).
         #[arg(num_args = 0.., trailing_var_arg = true, value_hint = ValueHint::CommandWithArguments)]
         argv: Vec<String>,
@@ -364,6 +478,9 @@ pub enum Commands {
         /// Binary path to attach the AppArmor profile to.
         #[arg(long, default_value = "/usr/local/bin/agent-shell", value_hint = ValueHint::FilePath)]
         attach_path: String,
+        /// Render the Gate 3.5 `cordon_<slug>_microvm` variant (grants `/dev/kvm`, `/dev/net/tun`).
+        #[arg(long)]
+        microvm: bool,
     },
 
     /// Render the idempotent `ip netns`, `veth`, and `iptables` provisioning commands.
@@ -376,6 +493,22 @@ pub enum Commands {
             value_parser = PossibleValuesParser::new(PROFILE_CANDIDATES)
         )]
         profile: String,
+        /// Also render the Gate 3.5 MicroVM tap pool (`tcvm<n>`, `10.200.255.0/24`).
+        #[arg(long)]
+        microvm: bool,
+        /// Number of MicroVM tap slots to provision (1-16).
+        #[arg(long = "tap-pool", default_value_t = TapSlot::DEFAULT_POOL)]
+        tap_pool: u8,
+        /// Owner uid of the persistent taps (defaults to the invoking user).
+        #[arg(long = "tap-owner-uid")]
+        tap_owner_uid: Option<u32>,
+    },
+
+    /// Gate 3.5 MicroVM operations.
+    Vm {
+        /// MicroVM action.
+        #[command(subcommand)]
+        action: VmSubcommand,
     },
 
     /// Evaluate an outbound HTTP/HTTPS request against L7 domain, DoH, and secret rules.
@@ -475,6 +608,7 @@ fn build_plan_from_cli_options(
     allow_domains: &[String],
     argv: &[String],
     allow_reserved_env: bool,
+    vm: &VmCliArgs,
 ) -> Result<SandboxLaunchPlan> {
     let mut env_cfg = if let Some(cfg_path) = config_file {
         CordonEnvironmentConfig::from_file(cfg_path)?
@@ -484,6 +618,7 @@ fn build_plan_from_cli_options(
             ..CordonEnvironmentConfig::default()
         }
     };
+    vm.apply_to(&mut env_cfg);
 
     for dom in allow_domains {
         if !env_cfg.allowed_domains.contains(dom) {
@@ -734,6 +869,7 @@ pub async fn execute_cli(cli: CordonCli) -> Result<i32> {
             allow_groups,
             mount_groups,
             envs,
+            vm,
             argv,
         } => {
             let plan = build_plan_from_cli_options(
@@ -751,6 +887,7 @@ pub async fn execute_cli(cli: CordonCli) -> Result<i32> {
                 &[],
                 &argv,
                 cli.allow_reserved_env,
+                &vm,
             )?;
             log_stderr_diagnostic("INFO", "sandbox.inspect_cmd", &plan.profile_name);
             if cli.json {
@@ -776,6 +913,7 @@ pub async fn execute_cli(cli: CordonCli) -> Result<i32> {
             allow_domains,
             offline,
             host_net,
+            vm,
             dry_run,
             argv,
         } => {
@@ -794,6 +932,7 @@ pub async fn execute_cli(cli: CordonCli) -> Result<i32> {
                 &allow_domains,
                 &argv,
                 cli.allow_reserved_env,
+                &vm,
             )?;
             log_stderr_diagnostic("INFO", "sandbox.run", &plan.profile_name);
 
@@ -809,6 +948,7 @@ pub async fn execute_cli(cli: CordonCli) -> Result<i32> {
                 return Ok(0);
             }
 
+            ensure_live_launch_supported(&plan)?;
             let (live_argv, fallback_notice) =
                 prepare_live_execution_argv(&plan, offline, host_net);
             if let Some(ref notice) = fallback_notice {
@@ -853,6 +993,7 @@ pub async fn execute_cli(cli: CordonCli) -> Result<i32> {
                 &[],
                 &shell_argv,
                 cli.allow_reserved_env,
+                &VmCliArgs::default(),
             )?;
             log_stderr_diagnostic("INFO", "sandbox.shell", &plan.profile_name);
             let (live_argv, fallback_notice) =
@@ -868,6 +1009,7 @@ pub async fn execute_cli(cli: CordonCli) -> Result<i32> {
                 }
                 return Ok(0);
             }
+            ensure_live_launch_supported(&plan)?;
             let Some((program, args)) = live_argv.split_first() else {
                 return Ok(1);
             };
@@ -916,9 +1058,14 @@ pub async fn execute_cli(cli: CordonCli) -> Result<i32> {
         Commands::RenderApparmor {
             profile,
             attach_path,
+            microvm,
         } => {
             let prof = get_profile(&profile)?;
-            let text = try_render_apparmor_profile(&prof, &attach_path)?;
+            let text = if microvm {
+                try_render_apparmor_microvm_profile(&prof, &attach_path)?
+            } else {
+                try_render_apparmor_profile(&prof, &attach_path)?
+            };
             log_stderr_diagnostic("INFO", "apparmor.render", &prof.name);
             if cli.json {
                 println!(
@@ -935,9 +1082,28 @@ pub async fn execute_cli(cli: CordonCli) -> Result<i32> {
             Ok(0)
         }
 
-        Commands::RenderNetns { profile } => {
+        Commands::RenderNetns {
+            profile,
+            microvm,
+            tap_pool,
+            tap_owner_uid,
+        } => {
             let prof = get_profile(&profile)?;
-            let commands = generate_network_setup_commands(&prof);
+            let mut commands = generate_network_setup_commands(&prof);
+            if microvm {
+                if !(1..=TapSlot::MAX_POOL).contains(&tap_pool) {
+                    return Err(CordonError::InvalidInput(format!(
+                        "--tap-pool must be between 1 and {}",
+                        TapSlot::MAX_POOL
+                    ))
+                    .into());
+                }
+                let uid = tap_owner_uid.unwrap_or_else(|| {
+                    use std::os::unix::fs::MetadataExt;
+                    std::fs::metadata("/proc/self").map_or(0, |m| m.uid())
+                });
+                commands.extend(generate_microvm_tap_commands(&prof, tap_pool, uid));
+            }
             log_stderr_diagnostic("INFO", "netns.render", &prof.name);
             if cli.json {
                 println!(
@@ -980,6 +1146,16 @@ pub async fn execute_cli(cli: CordonCli) -> Result<i32> {
                 0
             })
         }
+
+        Commands::Vm { action } => match action {
+            VmSubcommand::Supervise { run_id, .. } => {
+                log_stderr_diagnostic("ERROR", "microvm.supervise", &run_id);
+                Err(CordonError::MicroVmUnavailable(
+                    "the Gate 3.5 supervisor (cordon-guest-init transport) is not available in this build yet".to_owned(),
+                )
+                .into())
+            }
+        },
 
         Commands::Doctor => {
             let report = run_doctor_checks();

@@ -250,8 +250,8 @@ Unknown keys are errors, never silently ignored. Both formats round-trip through
 |---|---|
 | `kvm_device_accessible` | `/dev/kvm` exists and is readable and writable by the current user |
 | `tun_device_accessible` | `/dev/net/tun` exists, and the `tcvm*` pool is present in the netns when running as root |
-| `microvm_vmm_binaries` | Detail lists the paths and versions of `firecracker`, `qemu-system-x86_64` and `virtiofsd`. Passes if at least one engine is complete |
-| `btrfs_reflink_support` | `/var/lib/cordon` is on Btrfs. The check uses a `cp --reflink=always` probe in a temp dir |
+| `microvm_vmm_binaries` | Detail lists the paths of `firecracker`, `qemu-system-x86_64` and `virtiofsd`. Passes if at least one engine is complete (Firecracker, or QEMU plus virtiofsd) |
+| `btrfs_reflink_support` | `/var/lib/cordon` (or its nearest existing ancestor) is on Btrfs, read from `/proc/self/mountinfo` without writing anything |
 
 `/dev/vhost-vsock` is no longer checked. README, QUICKSTART and CHANGELOG move from "11-point" to "15-point".
 

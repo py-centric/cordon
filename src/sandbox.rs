@@ -990,6 +990,9 @@ pub fn run_doctor_checks() -> DoctorReport {
         },
     });
 
+    // Gate 3.5 readiness probes (non-required; 11 -> 15 checks).
+    checks.extend(crate::microvm::microvm_doctor_checks(find_binary_on_path));
+
     let healthy = checks.iter().filter(|c| c.required).all(|c| c.passed);
     let platform_summary = format!(
         "{}-{} (rust-cordon v{})",

@@ -22,7 +22,7 @@ This guide takes you from prerequisites to your first sandboxed run and back to 
 | Rust toolchain | `1.89` (Edition 2024) | Matches `rust-version` in [`Cargo.toml`](../Cargo.toml) |
 | Python (optional) | `>= 3.12` | Only for the reference control plane and its test suite |
 
-`cordon doctor` verifies all of the above in an **11-point diagnostic report**: the 7 toolchain binaries (`bwrap`, `ip`, `iptables`, `aa-status`, `mitmproxy`, `tshark`, `rustc`) plus `kernel_apparmor_lsm`, the live gate-confinement checks `apparmor_aa_exec` and `apparmor_confinement`, and `kernel_tiocsti_disabled`.
+`cordon doctor` verifies all of the above in a **15-point diagnostic report**: the 7 toolchain binaries (`bwrap`, `ip`, `iptables`, `aa-status`, `mitmproxy`, `tshark`, `rustc`) plus `kernel_apparmor_lsm`, the live gate-confinement checks `apparmor_aa_exec` and `apparmor_confinement`, `kernel_tiocsti_disabled`, and four optional MicroVM readiness probes (`kvm_device_accessible`, `tun_device_accessible`, `microvm_vmm_binaries`, `btrfs_reflink_support`) that never affect the overall health flag.
 
 ---
 

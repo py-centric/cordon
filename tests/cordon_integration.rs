@@ -282,6 +282,7 @@ fn test_control_plane_and_tui_snapshot() {
         command: vec!["cargo".to_owned(), "build".to_owned()],
         extra_masked_binaries: Vec::new(),
         extra_rw_paths: Vec::new(),
+        vm: None,
     });
     assert!(compile_res.is_ok());
 

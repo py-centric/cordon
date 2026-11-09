@@ -28,8 +28,8 @@ use crate::apparmor::render_apparmor_profile;
 use crate::config::{CordonConfigTemplate, CordonEnvironmentConfig, list_config_templates};
 use crate::dashboard::{render_dashboard_html, render_dashboard_js};
 use crate::domain::{
-    AuditEvent, CordonProfile, DoctorReport, EnforcementPlane, PolicyDecision, SandboxLaunchPlan,
-    Severity, Verdict,
+    AuditEvent, CordonProfile, DoctorReport, EnforcementPlane, MicroVmSpec, PolicyDecision,
+    RawMicroVmSpec, SandboxLaunchPlan, Severity, Verdict,
 };
 use crate::error::{CordonError, Rfc7807ProblemDetails};
 use crate::l7_policy::CordonPolicyEvaluator;
@@ -90,6 +90,9 @@ pub struct CompileLaunchRequest {
     /// Additional host paths to bind read-write.
     #[serde(default)]
     pub extra_rw_paths: Vec<String>,
+    /// Optional Gate 3.5 MicroVM settings (same schema as the `[vm]` config table).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vm: Option<RawMicroVmSpec>,
 }
 
 /// Request payload for `POST /api/v1/compile-config`.
@@ -282,13 +285,24 @@ impl CordonControlPlane {
         req: &CompileLaunchRequest,
     ) -> Result<SandboxLaunchPlan, CordonError> {
         let profile = get_profile(&req.profile)?;
-        let plan = compile_launch_plan(
+        let microvm = match req.vm {
+            Some(ref raw) if raw.backend.is_microvm() => Some(MicroVmSpec::try_from(raw.clone())?),
+            _ => None,
+        };
+        if let Some(ref spec) = microvm {
+            spec.validate_for_profile(&profile)?;
+        }
+        let mut plan = compile_launch_plan(
             &profile,
             Path::new(&req.workspace),
             &req.command,
             &req.extra_masked_binaries,
             &req.extra_rw_paths,
         )?;
+        if let Some(ref spec) = microvm {
+            let run_id = Uuid::new_v4().simple().to_string();
+            crate::microvm::attach_microvm_plan(&mut plan, &profile, spec, &run_id)?;
+        }
 
         let mut details = BTreeMap::new();
         details.insert(

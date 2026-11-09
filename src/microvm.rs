@@ -10,9 +10,9 @@ use std::fmt::Write as _;
 use serde_json::json;
 
 use crate::domain::{
-    CordonProfile, FirecrackerApiCall, GuestExecEnvelope, GuestNetConfig, IsolationBackend,
-    MicroVmCompileContext, MicroVmExecutionPlan, MicroVmSpec, NetworkMode, SandboxLaunchPlan,
-    TapSlot, VmDiskMode, VmRateLimits,
+    CordonProfile, DoctorCheck, FirecrackerApiCall, GuestExecEnvelope, GuestNetConfig,
+    IsolationBackend, MicroVmCompileContext, MicroVmExecutionPlan, MicroVmSpec, NetworkMode,
+    SandboxLaunchPlan, TapSlot, VmDiskMode, VmRateLimits,
 };
 use crate::error::CordonError;
 use crate::ports::MicroVmCompilerPort;
@@ -567,6 +567,111 @@ pub fn attach_microvm_plan(
     Ok(())
 }
 
+fn device_rw_accessible(path: &str) -> Result<(), String> {
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
+/// Returns the filesystem type of the mount containing `path` (longest mount-point prefix in
+/// `/proc/self/mountinfo`), resolving the nearest existing ancestor first.
+pub fn filesystem_type_of(path: &str, mountinfo: &str) -> Option<String> {
+    let mut probe = std::path::PathBuf::from(path);
+    while !probe.exists() {
+        if !probe.pop() {
+            break;
+        }
+    }
+    let target = std::fs::canonicalize(&probe).unwrap_or(probe);
+    let mut best: Option<(usize, String)> = None;
+    for line in mountinfo.lines() {
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        let Some(sep) = fields.iter().position(|f| *f == "-") else {
+            continue;
+        };
+        let (Some(mount_point), Some(fstype)) = (fields.get(4), fields.get(sep + 1)) else {
+            continue;
+        };
+        let mount_point = mount_point.replace("\\040", " ");
+        if target.starts_with(&mount_point)
+            && best
+                .as_ref()
+                .is_none_or(|(len, _)| mount_point.len() >= *len)
+        {
+            best = Some((mount_point.len(), (*fstype).to_owned()));
+        }
+    }
+    best.map(|(_, fstype)| fstype)
+}
+
+/// Non-required `cordon doctor` probes for Gate 3.5 readiness (they never affect `healthy`).
+pub fn microvm_doctor_checks(find_binary: impl Fn(&str) -> Option<String>) -> Vec<DoctorCheck> {
+    let mut checks = Vec::with_capacity(4);
+
+    let kvm = device_rw_accessible("/dev/kvm");
+    checks.push(DoctorCheck {
+        name: "kvm_device_accessible".to_owned(),
+        passed: kvm.is_ok(),
+        required: false,
+        detail: match kvm {
+            Ok(()) => "/dev/kvm is readable and writable (Gate 3.5 MicroVM available)".to_owned(),
+            Err(e) => format!("/dev/kvm not accessible ({e}); MicroVM backends unavailable"),
+        },
+    });
+
+    let tun = device_rw_accessible("/dev/net/tun");
+    checks.push(DoctorCheck {
+        name: "tun_device_accessible".to_owned(),
+        passed: tun.is_ok(),
+        required: false,
+        detail: match tun {
+            Ok(()) => "/dev/net/tun accessible for the per-netns tcvm tap pool".to_owned(),
+            Err(e) => {
+                format!("/dev/net/tun not accessible ({e}); MicroVM guests boot without a NIC")
+            }
+        },
+    });
+
+    let found: Vec<(&str, Option<String>)> = ["firecracker", "qemu-system-x86_64", "virtiofsd"]
+        .into_iter()
+        .map(|b| (b, find_binary(b)))
+        .collect();
+    let has = |name: &str| found.iter().any(|(b, p)| *b == name && p.is_some());
+    let engine_ready = has("firecracker") || (has("qemu-system-x86_64") && has("virtiofsd"));
+    let detail = found
+        .iter()
+        .map(|(b, p)| format!("{b}={}", p.as_deref().unwrap_or("missing")))
+        .collect::<Vec<_>>()
+        .join(", ");
+    checks.push(DoctorCheck {
+        name: "microvm_vmm_binaries".to_owned(),
+        passed: engine_ready,
+        required: false,
+        detail,
+    });
+
+    let mountinfo = std::fs::read_to_string("/proc/self/mountinfo").unwrap_or_default();
+    let fstype = filesystem_type_of("/var/lib/cordon", &mountinfo);
+    let btrfs = fstype.as_deref() == Some("btrfs");
+    checks.push(DoctorCheck {
+        name: "btrfs_reflink_support".to_owned(),
+        passed: btrfs,
+        required: false,
+        detail: if btrfs {
+            "/var/lib/cordon is on Btrfs (instant reflink overlays for btrfs-cow-overlay)".to_owned()
+        } else {
+            format!(
+                "/var/lib/cordon is on {}; btrfs-cow-overlay unavailable (ephemeral-tmpfs still works)",
+                fstype.as_deref().unwrap_or("an unknown filesystem")
+            )
+        },
+    });
+    checks
+}
+
 #[cfg(test)]
 mod tests {
     use std::num::NonZeroU32;
@@ -1051,5 +1156,54 @@ mod tests {
             Err(CordonError::UnsupportedVmOption(_))
         ));
         let _ = std::fs::remove_dir_all(&ws);
+    }
+
+    #[test]
+    fn mountinfo_longest_prefix_selects_the_filesystem() {
+        let mountinfo = "22 1 0:21 / / rw,relatime - ext4 /dev/sda1 rw\n\
+                         40 22 0:35 / /var rw,relatime - btrfs /dev/sda2 rw\n";
+        assert_eq!(
+            filesystem_type_of("/var/lib/cordon", mountinfo).as_deref(),
+            Some("btrfs")
+        );
+        assert_eq!(
+            filesystem_type_of("/etc", mountinfo).as_deref(),
+            Some("ext4")
+        );
+        assert_eq!(filesystem_type_of("/etc", "garbage line"), None);
+    }
+
+    #[test]
+    fn microvm_doctor_checks_are_never_required() {
+        let checks = microvm_doctor_checks(|b| {
+            (b == "firecracker").then(|| "/usr/bin/firecracker".to_owned())
+        });
+        let names: Vec<&str> = checks.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "kvm_device_accessible",
+                "tun_device_accessible",
+                "microvm_vmm_binaries",
+                "btrfs_reflink_support"
+            ]
+        );
+        assert!(checks.iter().all(|c| !c.required));
+        assert!(
+            checks
+                .iter()
+                .any(|c| c.name == "microvm_vmm_binaries" && c.passed)
+        );
+        let none = microvm_doctor_checks(|_| None);
+        assert!(none.iter().any(|c| c.name == "microvm_vmm_binaries"
+            && !c.passed
+            && c.detail.contains("virtiofsd=missing")));
+        let qemu_only = microvm_doctor_checks(|b| (b == "qemu-system-x86_64").then(String::new));
+        assert!(
+            qemu_only
+                .iter()
+                .any(|c| c.name == "microvm_vmm_binaries" && !c.passed),
+            "QEMU needs virtiofsd"
+        );
     }
 }
