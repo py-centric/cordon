@@ -9,7 +9,10 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::domain::{CordonProfile, FilesystemMode, NetworkMode, SandboxLaunchPlan};
+use crate::domain::{
+    CordonProfile, FilesystemMode, IsolationBackend, MicroVmSpec, NetworkMode, RawMicroVmSpec,
+    SandboxLaunchPlan, VmDiskMode, VmRateLimits,
+};
 use crate::error::CordonError;
 use crate::groups::{
     apply_allowed_binary_to_profile, apply_command_group_to_profile,
@@ -138,6 +141,10 @@ pub struct CordonEnvironmentConfig {
     /// Default command vector executed when none is passed on the CLI.
     #[serde(default)]
     pub command: Vec<String>,
+    /// Optional Gate 3.5 MicroVM settings (`[vm]` table / `VM_*` directives). Validated into a
+    /// [`MicroVmSpec`] by [`Self::microvm_spec`]; `None` or `native-bwrap` means no MicroVM.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vm: Option<RawMicroVmSpec>,
 }
 
 fn default_env_name() -> String {
@@ -178,8 +185,105 @@ impl Default for CordonEnvironmentConfig {
             denied_domains: Vec::new(),
             env: BTreeMap::new(),
             command: Vec::new(),
+            vm: None,
         }
     }
+}
+
+fn parse_vm_backend(val: &str) -> Result<IsolationBackend, CordonError> {
+    match val.trim().to_ascii_lowercase().as_str() {
+        "native-bwrap" | "native" | "bwrap" => Ok(IsolationBackend::NativeBwrap),
+        "qemu-microvm" | "qemu" => Ok(IsolationBackend::QemuMicrovm),
+        "firecracker" => Ok(IsolationBackend::Firecracker),
+        "krun" => Ok(IsolationBackend::Krun),
+        other => Err(CordonError::InvalidInput(format!(
+            "Unknown vm backend '{other}'. Expected 'native-bwrap', 'qemu-microvm', 'firecracker', or 'krun'."
+        ))),
+    }
+}
+
+fn parse_vm_disk_mode(val: &str) -> Result<VmDiskMode, CordonError> {
+    match val.trim().to_ascii_lowercase().as_str() {
+        "virtio-fs-live" => Ok(VmDiskMode::VirtioFsLive),
+        "ephemeral-tmpfs" => Ok(VmDiskMode::EphemeralTmpfs),
+        "btrfs-cow-overlay" => Ok(VmDiskMode::BtrfsCowOverlay),
+        "snapshot-restore" => Ok(VmDiskMode::SnapshotRestore),
+        other => Err(CordonError::InvalidInput(format!(
+            "Unknown vm disk_mode '{other}'. Expected 'virtio-fs-live', 'ephemeral-tmpfs', 'btrfs-cow-overlay', or 'snapshot-restore'."
+        ))),
+    }
+}
+
+fn parse_vm_number<T: std::str::FromStr>(key: &str, val: &str) -> Result<T, CordonError> {
+    val.trim().parse::<T>().map_err(|_| {
+        CordonError::InvalidInput(format!("Invalid vm {key} '{val}': expected an integer"))
+    })
+}
+
+fn parse_vm_nonzero(key: &str, val: &str) -> Result<std::num::NonZeroU32, CordonError> {
+    std::num::NonZeroU32::new(parse_vm_number::<u32>(key, val)?).ok_or_else(|| {
+        CordonError::InvalidInput(format!("Invalid vm {key} '{val}': must be greater than 0"))
+    })
+}
+
+/// Applies one `[vm]` key to a raw MicroVM spec (shared by TOML and `VM_RESOURCES`).
+fn apply_vm_key(vm: &mut RawMicroVmSpec, key: &str, val: &str) -> Result<(), CordonError> {
+    match key {
+        "backend" => vm.backend = parse_vm_backend(val)?,
+        "vcpus" => vm.vcpus = Some(parse_vm_number::<u8>(key, val)?),
+        "memory_mib" => vm.memory_mib = Some(parse_vm_number::<u32>(key, val)?),
+        "disk_mode" => vm.disk_mode = Some(parse_vm_disk_mode(val)?),
+        "kernel_image" => vm.kernel_image = Some(expand_tilde(val)),
+        "rootfs_image" => vm.rootfs_image = Some(expand_tilde(val)),
+        "snapshot" => vm.snapshot = Some(val.trim().to_owned()),
+        other => {
+            return Err(CordonError::InvalidInput(format!(
+                "Unknown vm key '{other}'. Expected backend, vcpus, memory_mib, disk_mode, kernel_image, rootfs_image, or snapshot."
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Applies one rate-limit key (TOML `[vm.rate_limits]` names or `VM_RATE_LIMIT` short aliases).
+fn apply_vm_rate_limit_key(
+    limits: &mut VmRateLimits,
+    key: &str,
+    val: &str,
+) -> Result<(), CordonError> {
+    match key {
+        "disk_iops" | "iops" => limits.disk_iops = Some(parse_vm_nonzero(key, val)?),
+        "disk_bandwidth_mib_s" | "disk_mib_s" => {
+            limits.disk_bandwidth_mib_s = Some(parse_vm_nonzero(key, val)?);
+        }
+        "net_bandwidth_mbit_s" | "net_mbit_s" => {
+            limits.net_bandwidth_mbit_s = Some(parse_vm_nonzero(key, val)?);
+        }
+        other => {
+            return Err(CordonError::InvalidInput(format!(
+                "Unknown vm rate limit '{other}'. Expected disk_iops, disk_bandwidth_mib_s, or net_bandwidth_mbit_s."
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Parses whitespace-separated `key=value` pairs (`VM_RESOURCES`, `VM_RATE_LIMIT`).
+fn parse_kv_pairs(directive: &str, rest: &str) -> Result<Vec<(String, String)>, CordonError> {
+    rest.split_whitespace()
+        .map(|item| {
+            let cleaned = item.trim_matches('"').trim_matches('\'');
+            cleaned
+                .split_once('=')
+                .map(|(k, v)| (k.trim().to_ascii_lowercase(), v.trim().to_owned()))
+                .filter(|(k, v)| !k.is_empty() && !v.is_empty())
+                .ok_or_else(|| {
+                    CordonError::InvalidInput(format!(
+                        "{directive}: expected key=value pairs, got '{cleaned}'"
+                    ))
+                })
+        })
+        .collect()
 }
 
 /// Expands a leading `~` or `~/` to the invoking user's `HOME` directory if available.
@@ -454,6 +558,50 @@ impl CordonEnvironmentConfig {
                     let (k, v) = parse_env_assignment(rest)?;
                     cfg.env.insert(k, v);
                 }
+                "VM_BACKEND" => {
+                    cfg.vm.get_or_insert_with(RawMicroVmSpec::default).backend =
+                        parse_vm_backend(arg)?;
+                }
+                "VM_RESOURCES" => {
+                    let vm = cfg.vm.get_or_insert_with(RawMicroVmSpec::default);
+                    for (k, v) in parse_kv_pairs("VM_RESOURCES", rest)? {
+                        if !matches!(k.as_str(), "vcpus" | "memory_mib" | "disk_mode") {
+                            return Err(CordonError::InvalidInput(format!(
+                                "Cordonfile line {}: VM_RESOURCES accepts vcpus, memory_mib, disk_mode; got '{k}'",
+                                line_idx + 1
+                            )));
+                        }
+                        apply_vm_key(vm, &k, &v)?;
+                    }
+                }
+                "VM_KERNEL" => {
+                    apply_vm_key(
+                        cfg.vm.get_or_insert_with(RawMicroVmSpec::default),
+                        "kernel_image",
+                        arg,
+                    )?;
+                }
+                "VM_ROOTFS" => {
+                    apply_vm_key(
+                        cfg.vm.get_or_insert_with(RawMicroVmSpec::default),
+                        "rootfs_image",
+                        arg,
+                    )?;
+                }
+                "VM_SNAPSHOT" => {
+                    apply_vm_key(
+                        cfg.vm.get_or_insert_with(RawMicroVmSpec::default),
+                        "snapshot",
+                        arg,
+                    )?;
+                }
+                "VM_RATE_LIMIT" => {
+                    let vm = cfg.vm.get_or_insert_with(RawMicroVmSpec::default);
+                    let limits = vm.rate_limits.get_or_insert_with(VmRateLimits::default);
+                    for (k, v) in parse_kv_pairs("VM_RATE_LIMIT", rest)? {
+                        apply_vm_rate_limit_key(limits, &k, &v)?;
+                    }
+                }
                 "CMD" => {
                     let trimmed_rest = rest.trim();
                     if trimmed_rest.starts_with('[') {
@@ -606,6 +754,18 @@ impl CordonEnvironmentConfig {
             cfg.env.insert(key.to_owned(), clean.to_owned());
             return Ok(());
         }
+        if section == "vm" {
+            return apply_vm_key(
+                cfg.vm.get_or_insert_with(RawMicroVmSpec::default),
+                key,
+                clean,
+            );
+        }
+        if section == "vm.rate_limits" {
+            let vm = cfg.vm.get_or_insert_with(RawMicroVmSpec::default);
+            let limits = vm.rate_limits.get_or_insert_with(VmRateLimits::default);
+            return apply_vm_rate_limit_key(limits, key, clean);
+        }
         match (section, key) {
             ("sandbox" | "environment" | "", "name") => clean.clone_into(&mut cfg.name),
             ("sandbox" | "environment" | "", "base_profile" | "profile") => {
@@ -693,6 +853,46 @@ impl CordonEnvironmentConfig {
         }
         for (k, v) in &self.env {
             let _ = writeln!(out, "ENV {k}=\"{v}\"");
+        }
+        if let Some(ref vm) = self.vm {
+            let _ = writeln!(out, "VM_BACKEND {}", vm.backend.as_str());
+            let mut resources = Vec::new();
+            if let Some(v) = vm.vcpus {
+                resources.push(format!("vcpus={v}"));
+            }
+            if let Some(m) = vm.memory_mib {
+                resources.push(format!("memory_mib={m}"));
+            }
+            if let Some(d) = vm.disk_mode {
+                resources.push(format!("disk_mode={}", d.as_str()));
+            }
+            if !resources.is_empty() {
+                let _ = writeln!(out, "VM_RESOURCES {}", resources.join(" "));
+            }
+            if let Some(ref k) = vm.kernel_image {
+                let _ = writeln!(out, "VM_KERNEL \"{k}\"");
+            }
+            if let Some(ref r) = vm.rootfs_image {
+                let _ = writeln!(out, "VM_ROOTFS \"{r}\"");
+            }
+            if let Some(ref snap) = vm.snapshot {
+                let _ = writeln!(out, "VM_SNAPSHOT {snap}");
+            }
+            if let Some(ref limits) = vm.rate_limits {
+                let mut parts = Vec::new();
+                if let Some(v) = limits.disk_iops {
+                    parts.push(format!("disk_iops={v}"));
+                }
+                if let Some(v) = limits.disk_bandwidth_mib_s {
+                    parts.push(format!("disk_mib_s={v}"));
+                }
+                if let Some(v) = limits.net_bandwidth_mbit_s {
+                    parts.push(format!("net_mbit_s={v}"));
+                }
+                if !parts.is_empty() {
+                    let _ = writeln!(out, "VM_RATE_LIMIT {}", parts.join(" "));
+                }
+            }
         }
         if !self.command.is_empty() {
             let quoted: Vec<String> = self.command.iter().map(|c| format!("\"{c}\"")).collect();
@@ -806,12 +1006,59 @@ impl CordonEnvironmentConfig {
             }
         }
 
+        if let Some(ref vm) = self.vm {
+            let _ = writeln!(out, "\n[vm]");
+            let _ = writeln!(out, "backend = \"{}\"", vm.backend.as_str());
+            if let Some(v) = vm.vcpus {
+                let _ = writeln!(out, "vcpus = {v}");
+            }
+            if let Some(m) = vm.memory_mib {
+                let _ = writeln!(out, "memory_mib = {m}");
+            }
+            if let Some(d) = vm.disk_mode {
+                let _ = writeln!(out, "disk_mode = \"{}\"", d.as_str());
+            }
+            if let Some(ref k) = vm.kernel_image {
+                let _ = writeln!(out, "kernel_image = \"{k}\"");
+            }
+            if let Some(ref r) = vm.rootfs_image {
+                let _ = writeln!(out, "rootfs_image = \"{r}\"");
+            }
+            if let Some(ref snap) = vm.snapshot {
+                let _ = writeln!(out, "snapshot = \"{snap}\"");
+            }
+            if let Some(ref limits) = vm.rate_limits {
+                let _ = writeln!(out, "\n[vm.rate_limits]");
+                if let Some(v) = limits.disk_iops {
+                    let _ = writeln!(out, "disk_iops = {v}");
+                }
+                if let Some(v) = limits.disk_bandwidth_mib_s {
+                    let _ = writeln!(out, "disk_bandwidth_mib_s = {v}");
+                }
+                if let Some(v) = limits.net_bandwidth_mbit_s {
+                    let _ = writeln!(out, "net_bandwidth_mbit_s = {v}");
+                }
+            }
+        }
+
         if !self.command.is_empty() {
             let _ = writeln!(out, "\n[command]");
             let c_q: Vec<String> = self.command.iter().map(|s| format!("\"{s}\"")).collect();
             let _ = writeln!(out, "entrypoint = [{}]", c_q.join(", "));
         }
         out
+    }
+
+    /// Validates the optional `[vm]` settings into a [`MicroVmSpec`].
+    ///
+    /// Returns `Ok(None)` when no MicroVM is configured or the backend is `native-bwrap`.
+    pub fn microvm_spec(&self) -> Result<Option<MicroVmSpec>, CordonError> {
+        match self.vm {
+            Some(ref raw) if raw.backend.is_microvm() => {
+                MicroVmSpec::try_from(raw.clone()).map(Some)
+            }
+            _ => Ok(None),
+        }
     }
 
     /// Merges this environment configuration onto its `base_profile` to produce a concrete [`CordonProfile`].
@@ -927,6 +1174,9 @@ impl CordonEnvironmentConfig {
         allow_reserved_env: bool,
     ) -> Result<(CordonProfile, SandboxLaunchPlan), CordonError> {
         let mut profile = self.build_profile()?;
+        if let Some(spec) = self.microvm_spec()? {
+            spec.validate_for_profile(&profile)?;
+        }
         for ro in readonly_mounts {
             let expanded = expand_tilde(ro);
             if !profile.extra_ro_binds.contains(&expanded) {
@@ -1255,5 +1505,137 @@ mod tests {
         let mut sorted_expected = expected.to_vec();
         sorted_expected.sort_unstable();
         assert_eq!(sorted_const, sorted_expected);
+    }
+
+    const VM_TOML: &str = r#"
+[sandbox]
+name = "fc-audit"
+base_profile = "untrusted-code"
+
+[vm]
+backend = "firecracker"   # sealed block VM
+vcpus = 2
+memory_mib = 1024
+disk_mode = "ephemeral-tmpfs"
+kernel_image = "/var/lib/cordon/kernels/vmlinux-microvm"
+rootfs_image = "/var/lib/cordon/images/alpine-audit.erofs"
+
+[vm.rate_limits]
+disk_iops = 5000
+disk_bandwidth_mib_s = 250
+net_bandwidth_mbit_s = 100
+"#;
+
+    const VM_CORDONFILE: &str = r#"FROM untrusted-code
+VM_BACKEND firecracker
+VM_RESOURCES vcpus=2 memory_mib=1024 disk_mode=ephemeral-tmpfs
+VM_KERNEL /var/lib/cordon/kernels/vmlinux-microvm
+VM_ROOTFS /var/lib/cordon/images/alpine-audit.erofs
+VM_RATE_LIMIT disk_iops=5000 disk_mib_s=250 net_mbit_s=100
+CMD ["python3", "-I", "analyze.py"]
+"#;
+
+    #[test]
+    fn vm_toml_and_cordonfile_parse_to_the_same_spec() {
+        let Ok(toml) = CordonEnvironmentConfig::from_toml_str(VM_TOML) else {
+            panic!("vm TOML must parse");
+        };
+        let Ok(cordonfile) = CordonEnvironmentConfig::from_cordonfile_str(VM_CORDONFILE) else {
+            panic!("vm Cordonfile must parse");
+        };
+        assert_eq!(toml.vm, cordonfile.vm);
+        let Some(ref vm) = toml.vm else {
+            panic!("vm section missing");
+        };
+        assert_eq!(vm.backend, IsolationBackend::Firecracker);
+        assert_eq!(vm.vcpus, Some(2));
+        assert_eq!(
+            vm.rate_limits
+                .and_then(|l| l.net_bandwidth_mbit_s)
+                .map(std::num::NonZeroU32::get),
+            Some(100)
+        );
+        let spec = toml.microvm_spec();
+        assert!(spec.is_ok_and(|s| s.is_some_and(|s| s.disk_mode() == VmDiskMode::EphemeralTmpfs)));
+    }
+
+    #[test]
+    fn vm_settings_round_trip_through_both_serializers() {
+        let Ok(cfg) = CordonEnvironmentConfig::from_toml_str(VM_TOML) else {
+            panic!("vm TOML must parse");
+        };
+        let toml_again = CordonEnvironmentConfig::from_toml_str(&cfg.to_toml_string());
+        assert!(toml_again.is_ok_and(|c| c.vm == cfg.vm));
+        let cf_again = CordonEnvironmentConfig::from_cordonfile_str(&cfg.to_cordonfile_string());
+        assert!(cf_again.is_ok_and(|c| c.vm == cfg.vm));
+        let json_again = CordonEnvironmentConfig::from_json_str(
+            &serde_json::to_string(&cfg).unwrap_or_default(),
+        );
+        assert!(json_again.is_ok_and(|c| c.vm == cfg.vm));
+    }
+
+    #[test]
+    fn configs_without_vm_serialize_unchanged() {
+        let cfg = CordonEnvironmentConfig::default();
+        assert!(!cfg.to_toml_string().contains("[vm]"));
+        assert!(!cfg.to_cordonfile_string().contains("VM_"));
+        let json = serde_json::to_value(&cfg).unwrap_or_default();
+        assert!(json.get("vm").is_none());
+        assert!(cfg.microvm_spec().is_ok_and(|s| s.is_none()));
+    }
+
+    #[test]
+    fn invalid_vm_settings_are_rejected() {
+        for bad in [
+            "[vm]\nbackend = \"vmware\"\n",
+            "[vm]\nvsock_cid = 3\n",
+            "[vm]\nvcpus = many\n",
+            "[vm.rate_limits]\ndisk_iops = 0\n",
+            "[vm.rate_limits]\nnet_bandwidth_mbps = 10\n",
+        ] {
+            assert!(
+                CordonEnvironmentConfig::from_toml_str(bad).is_err(),
+                "{bad}"
+            );
+        }
+        for bad in [
+            "VM_RESOURCES vcpus\n",
+            "VM_RESOURCES kernel_image=/boot/vmlinuz\n",
+            "VM_RATE_LIMIT net_mbps=10\n",
+            "VM_BACKEND hyperv\n",
+        ] {
+            assert!(
+                CordonEnvironmentConfig::from_cordonfile_str(bad).is_err(),
+                "{bad}"
+            );
+        }
+        let incompatible = "VM_BACKEND firecracker\nVM_RESOURCES disk_mode=virtio-fs-live\nVM_KERNEL /var/lib/cordon/kernels/vmlinux\n";
+        let Ok(cfg) = CordonEnvironmentConfig::from_cordonfile_str(incompatible) else {
+            panic!("syntax is valid");
+        };
+        assert!(matches!(
+            cfg.microvm_spec(),
+            Err(CordonError::IncompatibleVmDiskMode { .. })
+        ));
+    }
+
+    #[test]
+    fn native_bwrap_backend_means_no_microvm() {
+        let Ok(cfg) = CordonEnvironmentConfig::from_toml_str("[vm]\nbackend = \"native-bwrap\"\n")
+        else {
+            panic!("native-bwrap TOML must parse");
+        };
+        assert!(cfg.microvm_spec().is_ok_and(|s| s.is_none()));
+    }
+
+    #[test]
+    fn compile_plan_cross_validates_vm_against_profile() {
+        let src = "FROM ai-agent\nNET_MODE direct\nVM_BACKEND qemu-microvm\nVM_KERNEL /var/lib/cordon/kernels/vmlinux\nCMD [\"true\"]\n";
+        let Ok(cfg) = CordonEnvironmentConfig::from_cordonfile_str(src) else {
+            panic!("syntax is valid");
+        };
+        let ws = std::env::temp_dir();
+        let result = cfg.compile_plan(Some(&ws), &[], &[], &[], &[], &BTreeMap::new());
+        assert!(matches!(result, Err(CordonError::UnsupportedVmOption(_))));
     }
 }
