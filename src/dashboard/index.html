@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cordon | Universal Sandbox &amp; Network Inspection Control Plane</title>
+  <!-- DOM-safety policy: /app.js renders all dynamic data with textContent and
+       replaceChildren() only (never innerHTML or document.write), and wires every
+       interactive control with addEventListener (zero inline on*= handlers). -->
+  <style>
+    :root, [data-theme="light"] {
+      --bg-primary: #f8fafc;
+      --bg-card: #ffffff;
+      --bg-subtle: #f1f5f9;
+      --fg-primary: #0f172a;
+      --fg-secondary: #334155;
+      --border-color: #cbd5e1;
+      --accent: #1d4ed8;
+      --accent-fg: #ffffff;
+      --badge-allow: #15803d;
+      --badge-block: #b91c1c;
+    }
+    [data-theme="dark"] {
+      --bg-primary: #0f172a;
+      --bg-card: #1e293b;
+      --bg-subtle: #0b1120;
+      --fg-primary: #f8fafc;
+      --fg-secondary: #cbd5e1;
+      --border-color: #334155;
+      --accent: #38bdf8;
+      --accent-fg: #0f172a;
+      --badge-allow: #4ade80;
+      --badge-block: #f87171;
+    }
+    [data-theme="high-contrast"] {
+      --bg-primary: #000000;
+      --bg-card: #000000;
+      --bg-subtle: #000000;
+      --fg-primary: #ffffff;
+      --fg-secondary: #ffff00;
+      --border-color: #ffffff;
+      --accent: #ffff00;
+      --accent-fg: #000000;
+      --badge-allow: #00ff00;
+      --badge-block: #ff5555;
+    }
+    * { box-sizing: border-box; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg-primary);
+      color: var(--fg-primary);
+      line-height: 1.5;
+    }
+    header, main, footer {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 1rem 1.5rem;
+    }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      border-bottom: 2px solid var(--border-color);
+    }
+    .theme-controls {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    button, input, select, textarea {
+      min-height: 48px;
+      min-width: 48px;
+      padding: 0.5rem 1rem;
+      border-radius: 0.5rem;
+      border: 2px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--fg-primary);
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    textarea {
+      width: 100%;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-weight: 400;
+      cursor: text;
+    }
+    button.primary, button[aria-selected="true"] {
+      background: var(--accent);
+      color: var(--accent-fg);
+      border-color: var(--accent);
+    }
+    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+      outline: 3px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.25rem;
+      margin-top: 1.25rem;
+    }
+    @media (min-width: 600px) {
+      .grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (min-width: 841px) {
+      .grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    .card {
+      background: var(--bg-card);
+      border: 2px solid var(--border-color);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+    }
+    .gate-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .preset-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 0.75rem 0;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.85rem;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      background: var(--bg-subtle);
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      border: 1px solid var(--border-color);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .verdict-ALLOW { color: var(--badge-allow); font-weight: 700; }
+    .verdict-BLOCK { color: var(--badge-block); font-weight: 700; }
+    footer {
+      margin-top: 2rem;
+      border-top: 2px solid var(--border-color);
+      text-align: center;
+      color: var(--fg-secondary);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <header role="banner">
+    <div>
+      <h1 id="i18n-title" style="margin:0;font-size:1.5rem;"></h1>
+      <p id="i18n-subtitle" style="margin:0.25rem 0 0;color:var(--fg-secondary);"></p>
+    </div>
+    <nav class="theme-controls" aria-label="Theme and Locale Switcher">
+      <select id="locale-select" aria-label="Select Interface Language">
+        <option value="en">EN</option>
+        <option value="af">AF</option>
+        <option value="zu">ZU</option>
+      </select>
+      <button type="button" aria-label="Switch to Light Theme" id="btn-light"></button>
+      <button type="button" aria-label="Switch to Dark Theme" id="btn-dark"></button>
+      <button type="button" aria-label="Switch to High Contrast Theme" id="btn-hc"></button>
+    </nav>
+  </header>
+
+  <main role="main">
+    <section class="card" style="margin-top:1.25rem;" aria-labelledby="gates-heading">
+      <h2 id="gates-heading" style="margin-top:0;"></h2>
+      <div class="gate-tabs" role="tablist" aria-label="5-Gate Kernel Sandbox Architecture">
+        <button type="button" role="tab" id="tab-gate-0" aria-selected="true" aria-controls="gate-panel"></button>
+        <button type="button" role="tab" id="tab-gate-1" aria-selected="false" aria-controls="gate-panel"></button>
+        <button type="button" role="tab" id="tab-gate-2" aria-selected="false" aria-controls="gate-panel"></button>
+        <button type="button" role="tab" id="tab-gate-3" aria-selected="false" aria-controls="gate-panel"></button>
+        <button type="button" role="tab" id="tab-gate-4" aria-selected="false" aria-controls="gate-panel"></button>
+      </div>
+      <div id="gate-panel" role="tabpanel" class="mono" aria-live="polite"></div>
+    </section>
+
+    <section aria-labelledby="profiles-heading" style="margin-top:1.5rem;">
+      <h2 id="profiles-heading"></h2>
+      <div id="profiles-grid" class="grid" role="list"></div>
+    </section>
+
+    <section class="card" style="margin-top:1.5rem;" aria-labelledby="sim-heading">
+      <h2 id="sim-heading" style="margin-top:0;"></h2>
+      <div class="preset-bar" role="group" aria-label="1-Click Attack Simulation Presets">
+        <button type="button" id="btn-preset-allow"></button>
+        <button type="button" id="btn-preset-doh"></button>
+        <button type="button" id="btn-preset-pkg"></button>
+        <button type="button" id="btn-preset-secret"></button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:0.75rem;align-items:center;">
+        <label for="sim-profile" id="lbl-profile"></label>
+        <select id="sim-profile" aria-label="Select Sandbox Profile"></select>
+        <select id="sim-method" aria-label="Select HTTP Method">
+          <option value="POST">POST</option>
+          <option value="GET">GET</option>
+          <option value="PUT">PUT</option>
+          <option value="DELETE">DELETE</option>
+        </select>
+        <input id="sim-url" type="url" value="https://api.openai.com/v1/chat/completions" style="flex:1;min-width:260px;" aria-label="Target Outbound URL" />
+        <button type="button" class="primary" id="btn-eval" aria-label="Evaluate Outbound L7 Flow"></button>
+        <button type="button" id="btn-compile" aria-label="Compile Sandbox Launch Plan"></button>
+      </div>
+      <div style="margin-top:0.75rem;">
+        <label for="sim-body" id="lbl-body" style="display:block;margin-bottom:0.25rem;font-weight:600;"></label>
+        <textarea id="sim-body" rows="2" aria-label="Simulated HTTP Request Body"></textarea>
+      </div>
+      <pre id="sim-output" class="mono" style="margin-top:1rem;" aria-live="polite"></pre>
+    </section>
+
+    <section class="card" style="margin-top:1.5rem;" aria-labelledby="events-heading">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+        <h2 id="events-heading" style="margin:0;"></h2>
+        <button type="button" id="btn-refresh-events" aria-label="Refresh Audit Telemetry"></button>
+      </div>
+      <div style="overflow-x:auto;margin-top:0.75rem;">
+        <table aria-label="Audit Telemetry Events">
+          <thead>
+            <tr>
+              <th id="th-time"></th>
+              <th id="th-profile"></th>
+              <th id="th-verdict"></th>
+              <th id="th-target"></th>
+              <th id="th-reason"></th>
+            </tr>
+          </thead>
+          <tbody id="events-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer role="contentinfo">
+    <span id="i18n-footer">Developed by PyCentric | Cordon Layer 0 Security Engine (Rust Edition) | AGPL-3.0-only | Source: https://github.com/pycentric/cordon</span>
+  </footer>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

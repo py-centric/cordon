@@ -2,6 +2,7 @@
 
 use clap::Parser;
 use cordon::cli::{CordonCli, execute_cli, log_stderr_diagnostic};
+use cordon::error::CordonError;
 
 #[tokio::main]
 async fn main() {
@@ -10,7 +11,12 @@ async fn main() {
         Ok(code) => std::process::exit(code),
         Err(err) => {
             log_stderr_diagnostic("ERROR", "cli.error", &err.to_string());
-            std::process::exit(1);
+            // EX_UNAVAILABLE (69): a Gate 3.5 MicroVM prerequisite is missing on this host.
+            let unavailable = matches!(
+                err.downcast_ref::<CordonError>(),
+                Some(CordonError::MicroVmUnavailable(_))
+            );
+            std::process::exit(if unavailable { 69 } else { 1 });
         }
     }
 }

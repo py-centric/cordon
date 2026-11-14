@@ -1,0 +1,13 @@
+suts:
+  cordon_api:
+    name: "Cordon Control Plane"
+    type: HTTP
+    base_url: "http://127.0.0.1:8787"
+    security_allowlist:
+      allowed_paths:
+        - "/health"
+        - "/health/*"
+        - "/healthz"
+        - "/metrics"
+        - "/openapi.json"
+        - "/api/v1/**"

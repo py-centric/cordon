@@ -1,0 +1,83 @@
+{
+  "description": "Golden MicroVM spec contract cases consumed by tests/cordon_api_and_cli.rs. 'expect' is 'ok' or the CordonError variant name.",
+  "wire_names": {
+    "backends": ["native-bwrap", "qemu-microvm", "firecracker", "krun"],
+    "disk_modes": ["virtio-fs-live", "ephemeral-tmpfs", "btrfs-cow-overlay", "snapshot-restore"]
+  },
+  "cases": [
+    {
+      "name": "qemu_live_defaults",
+      "spec": {"backend": "qemu-microvm", "kernel_image": "/var/lib/cordon/kernels/vmlinux"},
+      "expect": "ok",
+      "normalized": {"backend": "qemu-microvm", "vcpus": 2, "memory_mib": 1024, "disk_mode": "virtio-fs-live", "kernel_image": "/var/lib/cordon/kernels/vmlinux"}
+    },
+    {
+      "name": "firecracker_ephemeral_with_limits",
+      "spec": {"backend": "firecracker", "vcpus": 4, "memory_mib": 2048, "kernel_image": "/var/lib/cordon/kernels/vmlinux", "rootfs_image": "/var/lib/cordon/images/base.erofs", "rate_limits": {"disk_iops": 5000, "net_bandwidth_mbit_s": 100}},
+      "expect": "ok",
+      "normalized": {"backend": "firecracker", "vcpus": 4, "memory_mib": 2048, "disk_mode": "ephemeral-tmpfs", "kernel_image": "/var/lib/cordon/kernels/vmlinux", "rootfs_image": "/var/lib/cordon/images/base.erofs", "rate_limits": {"disk_iops": 5000, "net_bandwidth_mbit_s": 100}}
+    },
+    {
+      "name": "firecracker_snapshot",
+      "spec": {"backend": "firecracker", "disk_mode": "snapshot-restore", "kernel_image": "/var/lib/cordon/kernels/vmlinux", "snapshot": "warm-01"},
+      "expect": "ok",
+      "normalized": {"backend": "firecracker", "vcpus": 2, "memory_mib": 1024, "disk_mode": "snapshot-restore", "kernel_image": "/var/lib/cordon/kernels/vmlinux", "snapshot": "warm-01"}
+    },
+    {
+      "name": "krun_reserved_parses",
+      "spec": {"backend": "krun"},
+      "expect": "ok",
+      "normalized": {"backend": "krun", "vcpus": 2, "memory_mib": 1024, "disk_mode": "virtio-fs-live"}
+    },
+    {
+      "name": "firecracker_rejects_virtio_fs",
+      "spec": {"backend": "firecracker", "disk_mode": "virtio-fs-live", "kernel_image": "/var/lib/cordon/kernels/vmlinux"},
+      "expect": "IncompatibleVmDiskMode"
+    },
+    {
+      "name": "qemu_rejects_snapshot_restore",
+      "spec": {"backend": "qemu-microvm", "disk_mode": "snapshot-restore", "kernel_image": "/var/lib/cordon/kernels/vmlinux", "snapshot": "warm-01"},
+      "expect": "IncompatibleVmDiskMode"
+    },
+    {
+      "name": "kernel_outside_allowlist",
+      "spec": {"backend": "qemu-microvm", "kernel_image": "/etc/shadow"},
+      "expect": "UnsafeMicroVmImage"
+    },
+    {
+      "name": "rootfs_traversal",
+      "spec": {"backend": "firecracker", "kernel_image": "/var/lib/cordon/kernels/vmlinux", "rootfs_image": "/var/lib/cordon/images/../../../../dev/sda"},
+      "expect": "UnsafeMicroVmImage"
+    },
+    {
+      "name": "qemu_net_limit_unsupported",
+      "spec": {"backend": "qemu-microvm", "disk_mode": "ephemeral-tmpfs", "kernel_image": "/var/lib/cordon/kernels/vmlinux", "rootfs_image": "/var/lib/cordon/images/base.erofs", "rate_limits": {"net_bandwidth_mbit_s": 10}},
+      "expect": "UnsupportedVmOption"
+    },
+    {
+      "name": "live_disk_limit_unsupported",
+      "spec": {"backend": "qemu-microvm", "kernel_image": "/var/lib/cordon/kernels/vmlinux", "rate_limits": {"disk_iops": 10}},
+      "expect": "UnsupportedVmOption"
+    },
+    {
+      "name": "vcpus_out_of_range",
+      "spec": {"backend": "firecracker", "vcpus": 33, "kernel_image": "/var/lib/cordon/kernels/vmlinux", "rootfs_image": "/var/lib/cordon/images/base.erofs"},
+      "expect": "InvalidInput"
+    },
+    {
+      "name": "missing_kernel",
+      "spec": {"backend": "firecracker", "rootfs_image": "/var/lib/cordon/images/base.erofs"},
+      "expect": "InvalidInput"
+    },
+    {
+      "name": "cow_requires_ext4",
+      "spec": {"backend": "firecracker", "disk_mode": "btrfs-cow-overlay", "kernel_image": "/var/lib/cordon/kernels/vmlinux", "rootfs_image": "/var/lib/cordon/images/base.erofs"},
+      "expect": "InvalidInput"
+    },
+    {
+      "name": "native_bwrap_is_not_a_vm_spec",
+      "spec": {"backend": "native-bwrap"},
+      "expect": "InvalidInput"
+    }
+  ]
+}

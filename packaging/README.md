@@ -7,12 +7,12 @@ Governing Spec: ADR-L0-SEC-02. Strictly complies with the PyCentric Zero Unicode
 | Unit | Purpose | Start order |
 | --- | --- | --- |
 | `cordon-netns.service` | Gate 1: network namespace, veth, iptables, tshark ring buffer | 1 |
-| `cordon-l7.service` | Gate 4: headless `mitmdump` L7 policy engine (no web UI) | 2 |
+| `cordon-l7.service` | Gate 4: headless `cordon l7-proxy` L7 policy engine (no web UI) | 2 |
 | `cordon-control-plane.service` | HTTP control plane + telemetry dashboard (127.0.0.1:8095) | 3 |
 
 ## System User
 
-`cordon-l7.service` runs as the dedicated `cordon` system user (MITM state in
+`cordon-l7.service` runs as the dedicated `cordon` system user (L7 proxy state in
 `/var/lib/cordon`, audit log in `/var/log/cordon`). Create it once:
 
 ```bash
@@ -39,7 +39,7 @@ minimal environment via `/usr/bin/env -i` internally.
 
 ## L7 Policy Provisioning
 
-The mitmproxy addon enforces the policy from `/run/cordon/policy.json`
+The native Rust Gate 4 proxy (`cordon l7-proxy`) enforces the policy from `/run/cordon/policy.json`
 (root-owned 0644). Provision it from a `Cordonfile` before launching workloads:
 
 ```bash

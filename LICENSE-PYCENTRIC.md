@@ -114,7 +114,7 @@ builds, and any equivalent branded build, including artifacts staged in
    runtime. These include bubblewrap (LGPL-2.1-or-later), the tshark and
    Wireshark command-line utilities (GPL-2.0-or-later), and mitmproxy (MIT).
    The exact pinned dependency set of the source tree is recorded in
-   `Cargo.lock` and `uv.lock`. Those components remain under their own license
+   `Cargo.lock`. Those components remain under their own license
    terms. This Part B does not relicense, restrict, or modify any rights granted
    to you by those licenses. Where a third-party license grants you rights to
    corresponding source code or license texts (for example GPL and LGPL

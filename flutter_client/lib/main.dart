@@ -10,6 +10,7 @@ import 'src/panes/gates_pane.dart';
 import 'src/panes/profiles_pane.dart';
 import 'src/panes/simulator_pane.dart';
 import 'src/theme.dart';
+import 'src/widgets/dashboard_chrome.dart';
 
 void main() {
   runApp(const CordonCompanionApp());
@@ -81,8 +82,8 @@ class _CordonCompanionAppState extends State<CordonCompanionApp> {
 }
 
 /// Adaptive dashboard shell: BottomNavigationBar (compact), NavigationRail
-/// (medium), permanent NavigationDrawer sidebar (expanded / ultra-wide with a
-/// centered 1440dp max-content container).
+/// (medium), permanent/collapsible NavigationDrawer sidebar (expanded /
+/// ultra-wide with a centered 1440dp max-content container).
 class CordonDashboardScaffold extends StatefulWidget {
   const CordonDashboardScaffold({
     super.key,
@@ -108,6 +109,7 @@ class _CordonDashboardScaffoldState extends State<CordonDashboardScaffold> {
   int _selectedIndex = 0;
   String? _selectedProfileSlug;
   int _telemetryEpoch = 0;
+  bool _sidebarCollapsed = false;
   final Set<int> _visitedTabs = {0};
   AsyncValue<HealthResponse> _health = const AsyncValue.loading();
 
@@ -191,65 +193,11 @@ class _CordonDashboardScaffoldState extends State<CordonDashboardScaffold> {
         (Icons.receipt_long, l10n.navTelemetry),
       ];
 
-  Widget _buildHealthBar(AppLocalizations l10n) {
-    final scheme = Theme.of(context).colorScheme;
-    final health = _health;
-    final (Color dot, String text) = switch (health.status) {
-      AsyncStatus.loading => (scheme.outline, l10n.healthChecking),
-      AsyncStatus.failure => (scheme.error, l10n.healthOffline),
-      AsyncStatus.success => (
-          scheme.tertiary,
-          l10n.healthOnline(health.data?.version ?? ''),
-        ),
-    };
-
-    return Container(
-      key: const Key('health-indicator'),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: scheme.surfaceContainerHighest,
-      child: Row(
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              color: dot,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              key: const Key('health-indicator-text'),
-              style: Theme.of(context).textTheme.labelMedium,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAttributionFooter(AppLocalizations l10n) {
-    return Container(
-      key: const Key('pycentric-attribution-footer'),
-      padding: const EdgeInsets.all(12),
-      child: Center(
-        child: Text(
-          l10n.attributionFooter,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.labelSmall,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildContent(AppLocalizations l10n) {
+  Widget _buildContent() {
     final tabs = (_visitedTabs.toList()..sort());
     return Column(
       children: [
-        _buildHealthBar(l10n),
+        CordonHealthBar(health: _health),
         Expanded(
           child: IndexedStack(
             index: tabs.indexOf(_selectedIndex),
@@ -259,61 +207,7 @@ class _CordonDashboardScaffoldState extends State<CordonDashboardScaffold> {
             ],
           ),
         ),
-        _buildAttributionFooter(l10n),
-      ],
-    );
-  }
-
-  Widget _buildThemeMenu(AppLocalizations l10n) {
-    Widget entry(IconData icon, String label, bool selected) => Row(
-          children: [
-            Icon(selected ? Icons.check : icon, size: 18),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-            ),
-          ],
-        );
-
-    return PopupMenuButton<String>(
-      key: const Key('display-menu'),
-      tooltip: l10n.settingsLabel,
-      icon: const Icon(Icons.palette),
-      onSelected: (value) {
-        switch (value) {
-          case 'theme_light':
-            widget.onThemeChanged(CordonThemePreset.light);
-          case 'theme_dark':
-            widget.onThemeChanged(CordonThemePreset.dark);
-          case 'theme_high_contrast':
-            widget.onThemeChanged(CordonThemePreset.highContrast);
-        }
-      },
-      itemBuilder: (context) => [
-        PopupMenuItem(
-          value: 'theme_light',
-          child: entry(
-            Icons.light_mode,
-            l10n.themeLight,
-            widget.themePreset == CordonThemePreset.light,
-          ),
-        ),
-        PopupMenuItem(
-          value: 'theme_dark',
-          child: entry(
-            Icons.dark_mode,
-            l10n.themeDark,
-            widget.themePreset == CordonThemePreset.dark,
-          ),
-        ),
-        PopupMenuItem(
-          value: 'theme_high_contrast',
-          child: entry(
-            Icons.contrast,
-            l10n.themeHighContrast,
-            widget.themePreset == CordonThemePreset.highContrast,
-          ),
-        ),
+        const CordonAttributionFooter(),
       ],
     );
   }
@@ -337,15 +231,29 @@ class _CordonDashboardScaffoldState extends State<CordonDashboardScaffold> {
     final width = MediaQuery.sizeOf(context).width;
     final isCompact = width < 600;
     final isExpanded = width >= 840;
+    final isUltraWide = width >= 1200;
 
     final destinations = _destinationLabels(l10n);
-    final content = _buildContent(l10n);
+    final content = _buildContent();
 
     final appBar = AppBar(
+      leading: isUltraWide
+          ? IconButton(
+              key: const Key('sidebar-collapse-toggle'),
+              icon: Icon(
+                _sidebarCollapsed ? Icons.menu_open : Icons.view_sidebar,
+              ),
+              onPressed: () =>
+                  setState(() => _sidebarCollapsed = !_sidebarCollapsed),
+            )
+          : null,
       title: Text(l10n.appTitle),
       actions: [
         _buildLocaleToggle(l10n),
-        _buildThemeMenu(l10n),
+        CordonThemeMenu(
+          themePreset: widget.themePreset,
+          onThemeChanged: widget.onThemeChanged,
+        ),
       ],
     );
 
@@ -365,7 +273,6 @@ class _CordonDashboardScaffoldState extends State<CordonDashboardScaffold> {
     }
 
     if (!isExpanded) {
-      // Medium tier (600-840dp): compact icon rail + 2-column content.
       return Scaffold(
         appBar: appBar,
         body: Row(
@@ -389,50 +296,15 @@ class _CordonDashboardScaffoldState extends State<CordonDashboardScaffold> {
       );
     }
 
-    // Expanded / ultra-wide tier (>= 840dp): permanent sidebar with a centered
-    // max-content container (capped at 1440dp).
     return Scaffold(
       appBar: appBar,
       body: Row(
         children: [
-          SizedBox(
-            width: 260,
-            child: NavigationDrawer(
-              selectedIndex: _selectedIndex,
-              onDestinationSelected: _onDestinationSelected,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(28, 16, 28, 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l10n.appTitle,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        l10n.appSubtitle,
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
-                    ],
-                  ),
-                ),
-                for (final (icon, label) in destinations)
-                  NavigationDrawerDestination(
-                    icon: Icon(icon),
-                    label: Flexible(
-                      child: Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+          CordonExpandedSidebar(
+            selectedIndex: _selectedIndex,
+            onDestinationSelected: _onDestinationSelected,
+            destinations: destinations,
+            collapsed: isUltraWide && _sidebarCollapsed,
           ),
           const VerticalDivider(thickness: 1, width: 1),
           Expanded(

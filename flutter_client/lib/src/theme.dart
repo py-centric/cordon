@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_tokens.g.dart';
+
 /// The three constitutional theme modes that must stay at parity.
 enum CordonThemePreset {
   light,
@@ -10,10 +12,10 @@ enum CordonThemePreset {
 /// Builds the [ThemeData] for the given [preset].
 ///
 /// All three presets enforce the constitutional 48x48dp minimum touch target
-/// and Material 3 semantics; High Contrast targets >= 7:1 contrast with a pure
-/// black scaffold and yellow primary.
+/// and Material 3 semantics; High Contrast targets >= 7:1 contrast using
+/// [CordonDesignTokens] high-contrast semantic tokens.
 ThemeData buildCordonTheme(CordonThemePreset preset) {
-  const minButtonSize = Size(48, 48);
+  const minButtonSize = CordonDesignTokens.touchTargetMin;
   final buttonThemes = (
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(minimumSize: minButtonSize),
@@ -27,12 +29,12 @@ ThemeData buildCordonTheme(CordonThemePreset preset) {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
-      scaffoldBackgroundColor: Colors.black,
+      scaffoldBackgroundColor: CordonDesignTokens.highContrastScaffold,
       colorScheme: const ColorScheme.highContrastDark(
-        primary: Color(0xFFFFFF00),
-        onPrimary: Colors.black,
-        surface: Colors.black,
-        onSurface: Colors.white,
+        primary: CordonDesignTokens.highContrastPrimary,
+        onPrimary: CordonDesignTokens.highContrastOnPrimary,
+        surface: CordonDesignTokens.highContrastSurface,
+        onSurface: CordonDesignTokens.highContrastOnSurface,
       ),
       elevatedButtonTheme: buttonThemes.elevatedButtonTheme,
       outlinedButtonTheme: buttonThemes.outlinedButtonTheme,
@@ -42,7 +44,7 @@ ThemeData buildCordonTheme(CordonThemePreset preset) {
   final isDark = preset == CordonThemePreset.dark;
   return ThemeData(
     useMaterial3: true,
-    colorSchemeSeed: const Color(0xFF2563EB),
+    colorSchemeSeed: CordonDesignTokens.brandSeed,
     brightness: isDark ? Brightness.dark : Brightness.light,
     elevatedButtonTheme: buttonThemes.elevatedButtonTheme,
     outlinedButtonTheme: buttonThemes.outlinedButtonTheme,

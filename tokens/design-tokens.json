@@ -1,0 +1,18 @@
+{
+  "$schema": "https://design-tokens.org/schema.json",
+  "color": {
+    "brand": {
+      "seed": { "$value": "#2563EB", "$type": "color" }
+    },
+    "highContrast": {
+      "scaffold": { "$value": "#000000", "$type": "color" },
+      "primary": { "$value": "#FFFF00", "$type": "color" },
+      "onPrimary": { "$value": "#000000", "$type": "color" },
+      "surface": { "$value": "#000000", "$type": "color" },
+      "onSurface": { "$value": "#FFFFFF", "$type": "color" }
+    }
+  },
+  "size": {
+    "touchTargetMin": { "$value": "48px", "$type": "dimension" }
+  }
+}

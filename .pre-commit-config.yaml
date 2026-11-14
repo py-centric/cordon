@@ -1,0 +1,100 @@
+# prek (Rust pre-commit) configuration for PyCentric Cordon
+# Install hooks: prek install --install-hooks
+# Run manually:  prek run --all-files  |  prek run --hook-stage pre-push --all-files
+
+default_install_hook_types:
+  - pre-commit
+  - pre-push
+
+repos:
+  - repo: local
+    hooks:
+      # ------------------------------------------------------------------
+      # Stage: pre-commit (fast static checks, formatting, unit tests)
+      # ------------------------------------------------------------------
+      - id: rust-fmt
+        name: Rust formatting (cargo fmt)
+        entry: cargo fmt -- --check
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: rust-clippy
+        name: Rust static analysis (cargo clippy -D warnings)
+        entry: cargo clippy --all-targets --offline -- -D warnings
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: rust-unit-tests
+        name: Rust library unit tests (cargo test --lib)
+        entry: cargo test --lib --offline
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: check-emdash
+        name: Typography invariant (zero em-dashes / en-dashes)
+        entry: bash scripts/check-emdash.sh
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: bundle-lint
+        name: Governance & bundle lint
+        entry: bash scripts/bundle-lint.sh
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: shell-syntax
+        name: Deploy shell script syntax (bash -n)
+        entry: bash -n deploy/bin/agent-sandbox deploy/bin/agent-shell deploy/net/setup-sandbox-net.sh deploy/tests/verify_sandbox_tv.sh
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: file-size-cap
+        name: Module size cap (<= 400 lines)
+        entry: bash scripts/check-file-size.sh
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # ------------------------------------------------------------------
+      # Stage: pre-push (all tests, dynamic checks, coverage, supply chain)
+      # ------------------------------------------------------------------
+      - id: rust-all-tests
+        name: Full Rust unit + integration test suite
+        entry: cargo test --offline --all-targets
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: rust-dynamic-analysis
+        name: Dynamic analysis (debug-assertions, overflow-checks, CLI smoke)
+        entry: bash scripts/dynamic-check.sh
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: rust-coverage-gate
+        name: Code & region/branch coverage gate (>= 90% lines, >= 88% regions)
+        entry: bash scripts/verify-coverage.sh
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: cargo-deny
+        name: Supply-chain policy check (cargo deny)
+        entry: cargo deny --offline check
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: cargo-audit
+        name: Vulnerability advisory check (cargo audit)
+        entry: cargo audit --no-fetch
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

@@ -47,5 +47,7 @@ must_use_candidate = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 doc_markdown = "allow"
+# Serialized domain/config structs intentionally expose >3 boolean flags (3 structs);
+# CLI/REPL/TUI dispatchers and renderers intentionally exceed 100 lines (18 functions).
 struct_excessive_bools = "allow"
 too_many_lines = "allow"

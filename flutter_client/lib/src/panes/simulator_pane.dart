@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../async_value.dart';
 import '../cordon_api_client.dart';
 import '../models.dart';
-import '../widgets/state_views.dart';
+import '../widgets/simulator_result_card.dart';
 
 /// One-click attack presets mirroring the web control plane dashboard.
 /// Each preset only pre-fills the form; the verdict itself always comes from
@@ -309,7 +309,13 @@ class _SimulatorPaneState extends State<SimulatorPane> {
           ),
         ),
         const SizedBox(height: 16),
-        _buildResultCard(l10n),
+        SimulatorResultCard(
+          decision: _decision,
+          lastMethod: _lastMethod,
+          lastUrl: _lastUrl,
+          baseUrl: widget.client.baseUrl,
+          onRetry: _evaluate,
+        ),
         ],
       ),
     );
@@ -354,132 +360,6 @@ class _SimulatorPaneState extends State<SimulatorPane> {
       onChanged: (value) {
         if (value != null) widget.onProfileChanged(value);
       },
-    );
-  }
-
-  Widget _buildResultCard(AppLocalizations l10n) {
-    final decision = _decision;
-    final scheme = Theme.of(context).colorScheme;
-
-    if (decision == null) {
-      return Card(
-        key: const Key('sim-idle-prompt'),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(l10n.simIdlePrompt),
-        ),
-      );
-    }
-
-    if (decision.isLoading) {
-      return Card(
-        key: const Key('sim-loading'),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(l10n.simRequestSummary(_lastMethod, _lastUrl)),
-              const SizedBox(height: 12),
-              const LinearProgressIndicator(),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (decision.isFailure) {
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: ErrorStateView(
-            message: describeApiError(
-              decision.error!,
-              l10n,
-              widget.client.baseUrl,
-            ),
-            onRetry: _evaluate,
-          ),
-        ),
-      );
-    }
-
-    final result = decision.data!;
-    final (chipColor, chipLabelColor) = switch (result.verdict) {
-      PolicyVerdict.allow => (scheme.tertiary, scheme.onTertiary),
-      PolicyVerdict.block => (scheme.error, scheme.onError),
-      PolicyVerdict.audit => (scheme.secondary, scheme.onSecondary),
-    };
-
-    return Card(
-      key: const Key('sim-result-card'),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              l10n.simRequestSummary(_lastMethod, _lastUrl),
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Container(
-                  key: const Key('verdict-chip'),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: chipColor,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    result.verdict.wire,
-                    style: TextStyle(
-                      color: chipLabelColor,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    l10n.simVerdictLabel,
-                    style: Theme.of(context).textTheme.labelLarge,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Semantics(
-              liveRegion: true,
-              child: Text(
-                l10n.simVerdictSummary(
-                  result.verdict.wire,
-                  result.statusCode,
-                  result.matchedRule,
-                ),
-                key: const Key('l7-verdict-text'),
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              l10n.simReasonLabel,
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            Text(result.reason),
-            const SizedBox(height: 8),
-            Text(
-              l10n.simLatencyLabel(result.evaluationLatencyUs),
-              key: const Key('l7-latency-text'),
-              style: Theme.of(context).textTheme.labelSmall,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

@@ -1,0 +1,28 @@
+# Git and CI metadata
+.git/
+.github/
+.gitignore
+.dockerignore
+
+# Documentation and tests
+docs/
+tests/
+*.md
+
+# Build artifacts and caches
+target/
+dist/
+build/
+.cordon-build-tmp/
+flutter_client/.dart_tool/
+flutter_client/build/
+
+# Secrets and local environment files
+.env
+.env.*
+config/secrets.env
+*.pem
+*.key
+*.p12
+*.keystore
+tea.db*

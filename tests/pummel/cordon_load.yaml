@@ -1,0 +1,33 @@
+execution:
+  - concurrency: 10
+    ramp-up: 5s
+    hold-for: 30s
+    scenario: cordon-control-plane
+
+scenarios:
+  cordon-control-plane:
+    default-address: http://127.0.0.1:8787
+    requests:
+      - url: /health/liveness
+        method: GET
+      - url: /openapi.json
+        method: GET
+      - url: /api/v1/profiles
+        method: GET
+      - url: /api/v1/compile
+        method: POST
+        headers:
+          Content-Type: application/json
+        body: '{"profile":"ai-agent","command":["/bin/true"]}'
+      - url: /api/v1/evaluate-l7
+        method: POST
+        headers:
+          Content-Type: application/json
+        body: '{"profile":"ai-agent","url":"https://api.github.com/repos","method":"GET"}'
+
+reporting:
+  - module: passfail
+    criteria:
+      - p95>200ms, stop as failed
+      - p99>500ms, stop as failed
+      - fail>0%, stop as failed
