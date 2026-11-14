@@ -55,23 +55,23 @@ flowchart TB
 
 ## 2. PyCentric `pc` CLI Orchestrator Reference
 
-Cordon includes a root [`pc.toml`](../pc.toml) manifest that registers all three project components (`cordon-core` in Rust, `cordon-l7-hooks` in Python, and `cordon-flutter-console` in Flutter) with the PyCentric `pc` CLI (installed on `PATH`).
+Cordon includes a root [`pc.toml`](../pc.toml) manifest that registers the project components (`cordon-core` in Rust and `cordon-flutter-console` in Flutter) with the PyCentric `pc` CLI (installed on `PATH`).
 
 ### 2.1 Core `pc` Lifecycle Commands
 
 | `pc` Command | Underlying Action | Purpose |
 | :--- | :--- | :--- |
-| `pc doctor` | Validates `pc.toml`, Rust, Python, Flutter, `go-task`, and container runtime | Verifies developer workstation readiness |
+| `pc doctor` | Validates `pc.toml`, Rust, Flutter, `go-task`, and container runtime | Verifies developer workstation readiness |
 | `pc build --release` | `go-task build:artifacts` (`cargo build --release --offline`) | Compiles optimized `target/release/cordon` binary |
-| `pc lint` | `cargo clippy -- -D warnings`, `ruff check`, `flutter analyze` | Enforces zero-warning static analysis across all stacks |
-| `pc fmt --check` | `cargo fmt -- --check`, `ruff format --check`, `dart format` | Verifies code formatting without mutating files |
+| `pc lint` | `cargo clippy -- -D warnings`, `flutter analyze` | Enforces zero-warning static analysis across all stacks |
+| `pc fmt --check` | `cargo fmt -- --check`, `dart format` | Verifies code formatting without mutating files |
 | `pc test --mode fast` | `go-task test:fast` (`cargo test --lib --offline`) | Runs sub-second unit test suite |
 | `pc test --mode integration` | `go-task test:integration` | Runs 5-gate sandbox, config, CLI, and HTTP API integration tests |
 | `pc test --mode contract` | `go-task test:contract` | Verifies RFC 7807 API contracts and Bash deployment script syntax |
 | `pc test --mode stress` | `go-task test:stress` | Runs ignored-marked sandbox hardening stress checks (`tests/cordon_hardening.rs`) |
 | `pc test --mode all` | Runs `fast` -> `integration` -> `contract` -> `stress` | Full pre-release verification gate |
-| `pc test --coverage` | `cargo llvm-cov` / `pytest --cov` / `flutter test --coverage` | Enforces the `>= 90%` line coverage gate |
-| `pc audit` | `cargo audit` & `pip-audit` | Scans Rust and Python dependency trees for CVEs |
+| `pc test --coverage` | `cargo llvm-cov` / `flutter test --coverage` | Enforces the `>= 90%` line coverage gate |
+| `pc audit` | `cargo deny check` & `cargo audit` | Scans Rust dependency tree for CVEs and licence policy |
 | `pc docs --all` | `go-task docs:all` | Builds Rust API docs and runs zero-em-dash constitutional validation |
 | `pc dev` | `go-task dev:run` | Starts the `axum` HTTP Control Plane and Web Dashboard on `127.0.0.1:8095` |
 | `pc deploy --env staging` | `deploy:preflight` -> `deploy:canary` -> `deploy:verify` -> `deploy:switch` | Validates all `Cordonfile` templates and installs binaries |
@@ -405,7 +405,7 @@ cordon[ai-agent|net:airgap|.]$ exit
 
 ## 9. Headless L7 Enforcement Plane, DNS & Audit Telemetry Operations
 
-* **Headless `mitmdump` (`cordon-l7.service`)**: Gate 4 L7 inspection runs headless `mitmdump` under `systemd` as `cordon-l7.service`, loading [`deploy/mitmproxy/agent_policy_addon.py`](../deploy/mitmproxy/agent_policy_addon.py) (being consolidated with [`src/cordon/mitm_addon.py`](../src/cordon/mitm_addon.py)). `ALLOW_DOMAIN` and `DENY_DOMAIN` directives are wired into this running L7 enforcement plane, so config changes take effect against live traffic evaluation.
+* **Headless `cordon l7-proxy` (`cordon-l7.service`)**: Gate 4 L7 inspection runs headless `cordon l7-proxy` under `systemd` as `cordon-l7.service`, loading `/run/cordon/policy.json` (root-owned `0644`). `ALLOW_DOMAIN` and `DENY_DOMAIN` directives are wired into this running L7 enforcement plane, so config changes take effect against live traffic evaluation.
 * **Audit Telemetry**: the service writes structured JSONL audit events to `/var/log/cordon/audit.jsonl` with `0640` permissions (auditor-group readable, never world-readable).
 * **DNS Resolution**: sandboxed DNS queries are DNATed at Gate 1 to the host-local resolver at `10.200.1.1:53`, with optional `dnsmasq` query logging on the host for DNS-level telemetry.
 * **PCAP Ring Buffer**: Gate 5 `tshark` captures on `veth-host` with a bounded rotating ring (`-b filesize:102400 -b files:10`), capping the forensic PCAP footprint at approximately 1 GB.

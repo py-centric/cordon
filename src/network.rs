@@ -166,6 +166,42 @@ pub fn build_tshark_command(_profile: &CordonProfile, pcap_dir: &str) -> Vec<Str
     ]
 }
 
+/// Builds shell commands writing the effective L7 [`crate::l7_policy::PolicyConfig`] to a
+/// root-owned runtime JSON file (`0644 root:root`) with single-quote shell escaping.
+pub fn build_policy_file_commands(
+    policy: &crate::l7_policy::PolicyConfig,
+    policy_path: &str,
+) -> Vec<String> {
+    let payload = serde_json::to_string_pretty(&policy.clone().normalized()).unwrap_or_default();
+    let escaped = payload.replace('\'', "'\\''");
+    let dir = policy_path
+        .rsplit_once('/')
+        .map_or(
+            "/run/cordon",
+            |(parent, _)| {
+                if parent.is_empty() { "/" } else { parent }
+            },
+        );
+    vec![
+        format!("install -d -m 0755 {dir}"),
+        format!("printf '%s\\n' '{escaped}' > {policy_path}"),
+        format!("chmod 0644 {policy_path}"),
+        format!("chown root:root {policy_path}"),
+    ]
+}
+
+/// Builds the native Rust `cordon l7-proxy` invocation command for Gate 4 (`cordon-l7.service`).
+pub fn build_l7_proxy_command(profile: &CordonProfile, policy_path: &str) -> Vec<String> {
+    vec![
+        "/usr/bin/cordon".to_owned(),
+        "l7-proxy".to_owned(),
+        "--listen".to_owned(),
+        format!("{}:{}", profile.host_veth_ip, profile.mitm_port),
+        "--policy-file".to_owned(),
+        policy_path.to_owned(),
+    ]
+}
+
 /// Default stateless implementation of [`NetnsCompilerPort`].
 #[derive(Debug, Default, Clone, Copy)]
 pub struct NetnsTopologyCompiler;

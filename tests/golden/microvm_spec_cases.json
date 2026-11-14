@@ -1,5 +1,5 @@
 {
-  "description": "Shared MicroVM spec contract cases consumed by the Rust (tests/cordon_api_and_cli.rs) and Python (tests/test_cordon.py) stacks. 'expect' is 'ok' or the CordonError variant name.",
+  "description": "Golden MicroVM spec contract cases consumed by tests/cordon_api_and_cli.rs. 'expect' is 'ok' or the CordonError variant name.",
   "wire_names": {
     "backends": ["native-bwrap", "qemu-microvm", "firecracker", "krun"],
     "disk_modes": ["virtio-fs-live", "ephemeral-tmpfs", "btrfs-cow-overlay", "snapshot-restore"]

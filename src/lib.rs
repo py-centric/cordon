@@ -11,6 +11,7 @@ pub mod domain;
 pub mod error;
 pub mod groups;
 pub mod l7_policy;
+pub mod l7_proxy;
 pub mod microvm;
 pub mod network;
 pub mod plugins;

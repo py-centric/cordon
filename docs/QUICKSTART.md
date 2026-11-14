@@ -20,7 +20,6 @@ This guide takes you from prerequisites to your first sandboxed run and back to 
 | `mitmproxy` (`mitmdump`) | any | Gate 4 L7 TLS inspection and policy enforcement |
 | `tshark` | any | Gate 5 bounded PCAP ring capture |
 | Rust toolchain | `1.89` (Edition 2024) | Matches `rust-version` in [`Cargo.toml`](../Cargo.toml) |
-| Python (optional) | `>= 3.12` | Only for the reference control plane and its test suite |
 
 `cordon doctor` verifies all of the above in a **15-point diagnostic report**: the 7 toolchain binaries (`bwrap`, `ip`, `iptables`, `aa-status`, `mitmproxy`, `tshark`, `rustc`) plus `kernel_apparmor_lsm`, the live gate-confinement checks `apparmor_aa_exec` and `apparmor_confinement`, `kernel_tiocsti_disabled`, and four optional MicroVM readiness probes (`kvm_device_accessible`, `tun_device_accessible`, `microvm_vmm_binaries`, `btrfs_reflink_support`) that never affect the overall health flag.
 
@@ -99,7 +98,7 @@ cordon repl
 
 ### 4.3 L7 enforcement plane (Gate 4)
 
-In production the L7 plane runs headless `mitmdump` under `systemd` as `cordon-l7.service`, loading [`deploy/mitmproxy/agent_policy_addon.py`](../deploy/mitmproxy/agent_policy_addon.py) and writing `0640` JSONL audit events to `/var/log/cordon/audit.jsonl`. `ALLOW_DOMAIN` / `DENY_DOMAIN` in your `Cordonfile` are wired into this running enforcement plane. Forensic L3/L4 capture is bounded at approximately 1 GB (`tshark -b filesize:102400 -b files:10`).
+In production the L7 plane runs headless `cordon l7-proxy` under `systemd` as `cordon-l7.service`, loading `/run/cordon/policy.json` (root-owned `0644`) and writing `0640` JSONL audit events to `/var/log/cordon/audit.jsonl`. `ALLOW_DOMAIN` / `DENY_DOMAIN` in your `Cordonfile` are wired into this running enforcement plane. Forensic L3/L4 capture is bounded at approximately 1 GB (`tshark -b filesize:102400 -b files:10`).
 
 ---
 

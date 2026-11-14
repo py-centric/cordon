@@ -40,6 +40,9 @@ _cordon() {
             cordon,inspect-cmd)
                 cmd="cordon__subcmd__inspect__subcmd__cmd"
                 ;;
+            cordon,l7-proxy)
+                cmd="cordon__subcmd__l7__subcmd__proxy"
+                ;;
             cordon,plugin)
                 cmd="cordon__subcmd__plugin"
                 ;;
@@ -69,6 +72,9 @@ _cordon() {
                 ;;
             cordon,tui)
                 cmd="cordon__subcmd__tui"
+                ;;
+            cordon,vm)
+                cmd="cordon__subcmd__vm"
                 ;;
             cordon__subcmd__config,help)
                 cmd="cordon__subcmd__config__subcmd__help"
@@ -115,6 +121,9 @@ _cordon() {
             cordon__subcmd__help,inspect-cmd)
                 cmd="cordon__subcmd__help__subcmd__inspect__subcmd__cmd"
                 ;;
+            cordon__subcmd__help,l7-proxy)
+                cmd="cordon__subcmd__help__subcmd__l7__subcmd__proxy"
+                ;;
             cordon__subcmd__help,plugin)
                 cmd="cordon__subcmd__help__subcmd__plugin"
                 ;;
@@ -142,6 +151,9 @@ _cordon() {
             cordon__subcmd__help,tui)
                 cmd="cordon__subcmd__help__subcmd__tui"
                 ;;
+            cordon__subcmd__help,vm)
+                cmd="cordon__subcmd__help__subcmd__vm"
+                ;;
             cordon__subcmd__help__subcmd__config,init)
                 cmd="cordon__subcmd__help__subcmd__config__subcmd__init"
                 ;;
@@ -156,6 +168,9 @@ _cordon() {
                 ;;
             cordon__subcmd__help__subcmd__plugin,list)
                 cmd="cordon__subcmd__help__subcmd__plugin__subcmd__list"
+                ;;
+            cordon__subcmd__help__subcmd__vm,supervise)
+                cmd="cordon__subcmd__help__subcmd__vm__subcmd__supervise"
                 ;;
             cordon__subcmd__plugin,help)
                 cmd="cordon__subcmd__plugin__subcmd__help"
@@ -175,6 +190,18 @@ _cordon() {
             cordon__subcmd__plugin__subcmd__help,list)
                 cmd="cordon__subcmd__plugin__subcmd__help__subcmd__list"
                 ;;
+            cordon__subcmd__vm,help)
+                cmd="cordon__subcmd__vm__subcmd__help"
+                ;;
+            cordon__subcmd__vm,supervise)
+                cmd="cordon__subcmd__vm__subcmd__supervise"
+                ;;
+            cordon__subcmd__vm__subcmd__help,help)
+                cmd="cordon__subcmd__vm__subcmd__help__subcmd__help"
+                ;;
+            cordon__subcmd__vm__subcmd__help,supervise)
+                cmd="cordon__subcmd__vm__subcmd__help__subcmd__supervise"
+                ;;
             *)
                 ;;
         esac
@@ -182,7 +209,7 @@ _cordon() {
 
     case "${cmd}" in
         cordon)
-            opts="-h -V --json --help --version run exec shell repl profiles groups plugin plugins config inspect-cmd render-apparmor render-netns evaluate-url doctor serve tui completions help"
+            opts="-h -V --json --allow-reserved-env --allow-workspace-plugins --help --version run exec shell repl profiles groups plugin plugins config inspect-cmd render-apparmor render-netns vm evaluate-url doctor serve l7-proxy tui completions help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -196,7 +223,7 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__completions)
-            opts="-o -h --output --json --help bash elvish fish powershell zsh"
+            opts="-o -h --output --json --allow-reserved-env --allow-workspace-plugins --help bash elvish fish powershell zsh"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -240,7 +267,7 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__config)
-            opts="-h --json --help list-templates init validate help"
+            opts="-h --json --allow-reserved-env --allow-workspace-plugins --help list-templates init validate help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -324,7 +351,7 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__config__subcmd__init)
-            opts="-t -f -o -h --template --format --output --json --help"
+            opts="-t -f -o -h --template --format --output --json --allow-reserved-env --allow-workspace-plugins --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -384,7 +411,7 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__config__subcmd__list__subcmd__templates)
-            opts="-h --json --help"
+            opts="-h --json --allow-reserved-env --allow-workspace-plugins --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -398,7 +425,7 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__config__subcmd__validate)
-            opts="-f -h --file --json --help"
+            opts="-f -h --file --json --allow-reserved-env --allow-workspace-plugins --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -442,7 +469,7 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__doctor)
-            opts="-h --json --help"
+            opts="-h --json --allow-reserved-env --allow-workspace-plugins --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -456,7 +483,7 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__evaluate__subcmd__url)
-            opts="-p -u -m -b -h --profile --url --method --body --json --help"
+            opts="-p -u -m -b -h --profile --url --method --body --json --allow-reserved-env --allow-workspace-plugins --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -502,7 +529,7 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__groups)
-            opts="-h --json --help"
+            opts="-h --json --allow-reserved-env --allow-workspace-plugins --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -516,7 +543,7 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__help)
-            opts="run shell repl profiles groups plugin config inspect-cmd render-apparmor render-netns evaluate-url doctor serve tui completions help"
+            opts="run shell repl profiles groups plugin config inspect-cmd render-apparmor render-netns vm evaluate-url doctor serve l7-proxy tui completions help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -656,6 +683,20 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__help__subcmd__inspect__subcmd__cmd)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        cordon__subcmd__help__subcmd__l7__subcmd__proxy)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -823,8 +864,36 @@ _cordon() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
+        cordon__subcmd__help__subcmd__vm)
+            opts="supervise"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        cordon__subcmd__help__subcmd__vm__subcmd__supervise)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
         cordon__subcmd__inspect__subcmd__cmd)
-            opts="-p -f -w -v -e -h --profile --config --workspace --volume --bind-ro --bind-rw --mask-bin --allow-bin --allow-group --mount-group --env --json --help"
+            opts="-p -f -w -v -e -h --profile --config --workspace --volume --bind-ro --bind-rw --mask-bin --allow-bin --allow-group --mount-group --env --vm-backend --vm-vcpus --vm-memory --vm-disk-mode --vm-kernel --vm-rootfs --vm-snapshot --json --allow-reserved-env --allow-workspace-plugins --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -939,6 +1008,89 @@ _cordon() {
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
+                --vm-backend)
+                    COMPREPLY=($(compgen -W "native-bwrap qemu-microvm firecracker krun" -- "${cur}"))
+                    return 0
+                    ;;
+                --vm-vcpus)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --vm-memory)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --vm-disk-mode)
+                    COMPREPLY=($(compgen -W "virtio-fs-live ephemeral-tmpfs btrfs-cow-overlay snapshot-restore" -- "${cur}"))
+                    return 0
+                    ;;
+                --vm-kernel)
+                    local oldifs
+                    if [ -n "${IFS+x}" ]; then
+                        oldifs="$IFS"
+                    fi
+                    IFS=$'\n'
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    if [ -n "${oldifs+x}" ]; then
+                        IFS="$oldifs"
+                    fi
+                    if [[ "${BASH_VERSINFO[0]}" -ge 4 ]]; then
+                        compopt -o filenames
+                    fi
+                    return 0
+                    ;;
+                --vm-rootfs)
+                    local oldifs
+                    if [ -n "${IFS+x}" ]; then
+                        oldifs="$IFS"
+                    fi
+                    IFS=$'\n'
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    if [ -n "${oldifs+x}" ]; then
+                        IFS="$oldifs"
+                    fi
+                    if [[ "${BASH_VERSINFO[0]}" -ge 4 ]]; then
+                        compopt -o filenames
+                    fi
+                    return 0
+                    ;;
+                --vm-snapshot)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        cordon__subcmd__l7__subcmd__proxy)
+            opts="-h --listen --policy-file --json --allow-reserved-env --allow-workspace-plugins --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --listen)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --policy-file)
+                    local oldifs
+                    if [ -n "${IFS+x}" ]; then
+                        oldifs="$IFS"
+                    fi
+                    IFS=$'\n'
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    if [ -n "${oldifs+x}" ]; then
+                        IFS="$oldifs"
+                    fi
+                    if [[ "${BASH_VERSINFO[0]}" -ge 4 ]]; then
+                        compopt -o filenames
+                    fi
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -947,7 +1099,7 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__plugin)
-            opts="-h --json --help list info help"
+            opts="-h --json --allow-reserved-env --allow-workspace-plugins --help list info help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1017,7 +1169,7 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__plugin__subcmd__info)
-            opts="-h --json --help cordon-fish cordon-hud"
+            opts="-h --json --allow-reserved-env --allow-workspace-plugins --help cordon-fish cordon-hud"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1031,7 +1183,7 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__plugin__subcmd__list)
-            opts="-h --json --help"
+            opts="-h --json --allow-reserved-env --allow-workspace-plugins --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1045,7 +1197,7 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__profiles)
-            opts="-h --json --help"
+            opts="-h --json --allow-reserved-env --allow-workspace-plugins --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1059,7 +1211,7 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__render__subcmd__apparmor)
-            opts="-p -h --profile --attach-path --json --help"
+            opts="-p -h --profile --attach-path --microvm --json --allow-reserved-env --allow-workspace-plugins --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1096,7 +1248,7 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__render__subcmd__netns)
-            opts="-p -h --profile --json --help"
+            opts="-p -h --profile --microvm --tap-pool --tap-owner-uid --json --allow-reserved-env --allow-workspace-plugins --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1110,6 +1262,14 @@ _cordon() {
                     COMPREPLY=($(compgen -W "ai-agent untrusted-code package-build network-audit gui-desktop airgapped" -- "${cur}"))
                     return 0
                     ;;
+                --tap-pool)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --tap-owner-uid)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -1118,7 +1278,7 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__repl)
-            opts="-p -f -w -h --profile --config --workspace --allow-bin --allow-group --mount-group --offline --host-net --dry-run --json --help"
+            opts="-p -f -w -h --profile --config --workspace --allow-bin --allow-group --mount-group --offline --host-net --dry-run --json --allow-reserved-env --allow-workspace-plugins --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1196,7 +1356,7 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__run)
-            opts="-p -f -w -v -e -h --profile --config --workspace --volume --bind-ro --bind-rw --mask-bin --allow-bin --allow-group --mount-group --env --allow-domain --offline --host-net --dry-run --json --help"
+            opts="-p -f -w -v -e -h --profile --config --workspace --volume --bind-ro --bind-rw --mask-bin --allow-bin --allow-group --mount-group --env --allow-domain --offline --host-net --vm-backend --vm-vcpus --vm-memory --vm-disk-mode --vm-kernel --vm-rootfs --vm-snapshot --dry-run --json --allow-reserved-env --allow-workspace-plugins --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1315,6 +1475,56 @@ _cordon() {
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
+                --vm-backend)
+                    COMPREPLY=($(compgen -W "native-bwrap qemu-microvm firecracker krun" -- "${cur}"))
+                    return 0
+                    ;;
+                --vm-vcpus)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --vm-memory)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --vm-disk-mode)
+                    COMPREPLY=($(compgen -W "virtio-fs-live ephemeral-tmpfs btrfs-cow-overlay snapshot-restore" -- "${cur}"))
+                    return 0
+                    ;;
+                --vm-kernel)
+                    local oldifs
+                    if [ -n "${IFS+x}" ]; then
+                        oldifs="$IFS"
+                    fi
+                    IFS=$'\n'
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    if [ -n "${oldifs+x}" ]; then
+                        IFS="$oldifs"
+                    fi
+                    if [[ "${BASH_VERSINFO[0]}" -ge 4 ]]; then
+                        compopt -o filenames
+                    fi
+                    return 0
+                    ;;
+                --vm-rootfs)
+                    local oldifs
+                    if [ -n "${IFS+x}" ]; then
+                        oldifs="$IFS"
+                    fi
+                    IFS=$'\n'
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    if [ -n "${oldifs+x}" ]; then
+                        IFS="$oldifs"
+                    fi
+                    if [[ "${BASH_VERSINFO[0]}" -ge 4 ]]; then
+                        compopt -o filenames
+                    fi
+                    return 0
+                    ;;
+                --vm-snapshot)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -1323,7 +1533,7 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__serve)
-            opts="-h --host --port --json --help"
+            opts="-h --host --port --json --allow-reserved-env --allow-workspace-plugins --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1345,7 +1555,7 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__shell)
-            opts="-p -f -w -v -h --profile --config --workspace --volume --allow-bin --allow-group --mount-group --offline --host-net --dry-run --json --help"
+            opts="-p -f -w -v -h --profile --config --workspace --volume --allow-bin --allow-group --mount-group --offline --host-net --dry-run --json --allow-reserved-env --allow-workspace-plugins --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1431,7 +1641,7 @@ _cordon() {
             return 0
             ;;
         cordon__subcmd__tui)
-            opts="-p -w -h --profile --workspace --snapshot --json --help"
+            opts="-p -w -h --profile --workspace --snapshot --json --allow-reserved-env --allow-workspace-plugins --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -1457,6 +1667,92 @@ _cordon() {
                     if [[ "${BASH_VERSINFO[0]}" -ge 4 ]]; then
                         compopt -o plusdirs
                     fi
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        cordon__subcmd__vm)
+            opts="-h --json --allow-reserved-env --allow-workspace-plugins --help supervise help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        cordon__subcmd__vm__subcmd__help)
+            opts="supervise help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        cordon__subcmd__vm__subcmd__help__subcmd__help)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        cordon__subcmd__vm__subcmd__help__subcmd__supervise)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 4 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        cordon__subcmd__vm__subcmd__supervise)
+            opts="-h --spec-json --run-id --tap --forward-env --json --allow-reserved-env --allow-workspace-plugins --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --spec-json)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --run-id)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --tap)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --forward-env)
+                    COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
                 *)

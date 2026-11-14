@@ -16,6 +16,8 @@ _cordon() {
     local context curcontext="$curcontext" state line
     _arguments "${_arguments_options[@]}" : \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 '-V[Print version]' \
@@ -48,12 +50,27 @@ _arguments "${_arguments_options[@]}" : \
 '*-e+[Additional environment variables (\`KEY=VALUE\`) injected into the sandbox]:ENVS:_default' \
 '*--env=[Additional environment variables (\`KEY=VALUE\`) injected into the sandbox]:ENVS:_default' \
 '*--allow-domain=[Additional outbound domains permitted by L7 policy]:ALLOW_DOMAINS:_hosts' \
+'--vm-backend=[MicroVM isolation backend (\`qemu-microvm\`, \`firecracker\`; \`native-bwrap\` disables it)]:VM_BACKEND:((native-bwrap\:"Native Bubblewrap process isolation on the host kernel (no MicroVM)"
+qemu-microvm\:"QEMU \`-M microvm\` with a virtiofsd-exported live workspace"
+firecracker\:"Firecracker sealed block-device MicroVM with optional snapshot restore"
+krun\:"libkrun-based MicroVM (reserved\: accepted by the schema, rejected by the compiler until a launcher is selected)"))' \
+'--vm-vcpus=[Guest vCPUs (1-32)]:VM_VCPUS:_default' \
+'--vm-memory=[Guest memory in MiB (128-65536)]:VM_MEMORY:_default' \
+'--vm-disk-mode=[Guest disk mode (\`virtio-fs-live\`, \`ephemeral-tmpfs\`, \`btrfs-cow-overlay\`, \`snapshot-restore\`)]:VM_DISK_MODE:((virtio-fs-live\:"Live host view exported through virtio-fs (QEMU/krun only; Firecracker has no virtio-fs)"
+ephemeral-tmpfs\:"Read-only base image with a guest RAM (tmpfs) overlay, discarded on exit"
+btrfs-cow-overlay\:"Instant Btrfs reflink clone of an ext4 base image, attached read-write, deleted on exit"
+snapshot-restore\:"Warm memory + device state restore from a named snapshot (Firecracker only)"))' \
+'--vm-kernel=[Guest kernel image (under \`/boot\`, \`/var/lib/cordon/kernels\`, or \`~/.local/share/cordon/kernels\`)]:VM_KERNEL:_files' \
+'--vm-rootfs=[Guest root filesystem image (under \`/var/lib/cordon/images\` or \`~/.local/share/cordon/images\`)]:VM_ROOTFS:_files' \
+'--vm-snapshot=[Named Firecracker snapshot to restore (implies \`--vm-disk-mode snapshot-restore\`)]:VM_SNAPSHOT:_default' \
 '--offline[Force complete loopback air-gap (\`bwrap --unshare-net\`) regardless of profile default]' \
 '--host-net[Force direct host network namespace inside Bubblewrap (bypassing \`ip netns exec\`)]' \
 '--dry-run[Compile and print the 5-gate execution plan without spawning the child process]' \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
-'-h[Print help]' \
-'--help[Print help]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
 '*::argv -- Target command and arguments to execute inside the sandbox (optional if `--config` defines `CMD`):_cmdambivalent' \
 && ret=0
 ;;
@@ -76,12 +93,27 @@ _arguments "${_arguments_options[@]}" : \
 '*-e+[Additional environment variables (\`KEY=VALUE\`) injected into the sandbox]:ENVS:_default' \
 '*--env=[Additional environment variables (\`KEY=VALUE\`) injected into the sandbox]:ENVS:_default' \
 '*--allow-domain=[Additional outbound domains permitted by L7 policy]:ALLOW_DOMAINS:_hosts' \
+'--vm-backend=[MicroVM isolation backend (\`qemu-microvm\`, \`firecracker\`; \`native-bwrap\` disables it)]:VM_BACKEND:((native-bwrap\:"Native Bubblewrap process isolation on the host kernel (no MicroVM)"
+qemu-microvm\:"QEMU \`-M microvm\` with a virtiofsd-exported live workspace"
+firecracker\:"Firecracker sealed block-device MicroVM with optional snapshot restore"
+krun\:"libkrun-based MicroVM (reserved\: accepted by the schema, rejected by the compiler until a launcher is selected)"))' \
+'--vm-vcpus=[Guest vCPUs (1-32)]:VM_VCPUS:_default' \
+'--vm-memory=[Guest memory in MiB (128-65536)]:VM_MEMORY:_default' \
+'--vm-disk-mode=[Guest disk mode (\`virtio-fs-live\`, \`ephemeral-tmpfs\`, \`btrfs-cow-overlay\`, \`snapshot-restore\`)]:VM_DISK_MODE:((virtio-fs-live\:"Live host view exported through virtio-fs (QEMU/krun only; Firecracker has no virtio-fs)"
+ephemeral-tmpfs\:"Read-only base image with a guest RAM (tmpfs) overlay, discarded on exit"
+btrfs-cow-overlay\:"Instant Btrfs reflink clone of an ext4 base image, attached read-write, deleted on exit"
+snapshot-restore\:"Warm memory + device state restore from a named snapshot (Firecracker only)"))' \
+'--vm-kernel=[Guest kernel image (under \`/boot\`, \`/var/lib/cordon/kernels\`, or \`~/.local/share/cordon/kernels\`)]:VM_KERNEL:_files' \
+'--vm-rootfs=[Guest root filesystem image (under \`/var/lib/cordon/images\` or \`~/.local/share/cordon/images\`)]:VM_ROOTFS:_files' \
+'--vm-snapshot=[Named Firecracker snapshot to restore (implies \`--vm-disk-mode snapshot-restore\`)]:VM_SNAPSHOT:_default' \
 '--offline[Force complete loopback air-gap (\`bwrap --unshare-net\`) regardless of profile default]' \
 '--host-net[Force direct host network namespace inside Bubblewrap (bypassing \`ip netns exec\`)]' \
 '--dry-run[Compile and print the 5-gate execution plan without spawning the child process]' \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
-'-h[Print help]' \
-'--help[Print help]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
 '*::argv -- Target command and arguments to execute inside the sandbox (optional if `--config` defines `CMD`):_cmdambivalent' \
 && ret=0
 ;;
@@ -102,6 +134,8 @@ _arguments "${_arguments_options[@]}" : \
 '--host-net[Force direct host network namespace inside Bubblewrap]' \
 '--dry-run[Print the prepared sandbox shell command without spawning]' \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -121,6 +155,8 @@ _arguments "${_arguments_options[@]}" : \
 '--host-net[Start REPL in direct host network mode]' \
 '--dry-run[Dry-run mode inside REPL (\`run\` / \`!<cmd>\` prints command instead of spawning)]' \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -128,6 +164,8 @@ _arguments "${_arguments_options[@]}" : \
 (profiles)
 _arguments "${_arguments_options[@]}" : \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -135,6 +173,8 @@ _arguments "${_arguments_options[@]}" : \
 (groups)
 _arguments "${_arguments_options[@]}" : \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -142,6 +182,8 @@ _arguments "${_arguments_options[@]}" : \
 (plugin)
 _arguments "${_arguments_options[@]}" : \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 ":: :_cordon__subcmd__plugin_commands" \
@@ -157,6 +199,8 @@ _arguments "${_arguments_options[@]}" : \
             (list)
 _arguments "${_arguments_options[@]}" : \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -164,6 +208,8 @@ _arguments "${_arguments_options[@]}" : \
 (info)
 _arguments "${_arguments_options[@]}" : \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 '::name -- Plugin name or repo identifier (`cordon-fish`, `cordon-hud`):(cordon-fish cordon-hud)' \
@@ -204,6 +250,8 @@ esac
 (plugins)
 _arguments "${_arguments_options[@]}" : \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 ":: :_cordon__subcmd__plugin_commands" \
@@ -219,6 +267,8 @@ _arguments "${_arguments_options[@]}" : \
             (list)
 _arguments "${_arguments_options[@]}" : \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -226,6 +276,8 @@ _arguments "${_arguments_options[@]}" : \
 (info)
 _arguments "${_arguments_options[@]}" : \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 '::name -- Plugin name or repo identifier (`cordon-fish`, `cordon-hud`):(cordon-fish cordon-hud)' \
@@ -266,6 +318,8 @@ esac
 (config)
 _arguments "${_arguments_options[@]}" : \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 ":: :_cordon__subcmd__config_commands" \
@@ -281,6 +335,8 @@ _arguments "${_arguments_options[@]}" : \
             (list-templates)
 _arguments "${_arguments_options[@]}" : \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -294,6 +350,8 @@ _arguments "${_arguments_options[@]}" : \
 '-o+[Optional output file path (prints to stdout when omitted)]:OUTPUT:_files' \
 '--output=[Optional output file path (prints to stdout when omitted)]:OUTPUT:_files' \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -303,6 +361,8 @@ _arguments "${_arguments_options[@]}" : \
 '-f+[Path to the configuration file to validate]:FILE:_files' \
 '--file=[Path to the configuration file to validate]:FILE:_files' \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -361,9 +421,24 @@ _arguments "${_arguments_options[@]}" : \
 '*--mount-group=[Mount pre-populated directory groups (\`xdg-config\`, \`agent-state\`, etc.)]:MOUNT_GROUPS:_default' \
 '*-e+[Additional environment variables (\`KEY=VALUE\`) injected into the sandbox]:ENVS:_default' \
 '*--env=[Additional environment variables (\`KEY=VALUE\`) injected into the sandbox]:ENVS:_default' \
+'--vm-backend=[MicroVM isolation backend (\`qemu-microvm\`, \`firecracker\`; \`native-bwrap\` disables it)]:VM_BACKEND:((native-bwrap\:"Native Bubblewrap process isolation on the host kernel (no MicroVM)"
+qemu-microvm\:"QEMU \`-M microvm\` with a virtiofsd-exported live workspace"
+firecracker\:"Firecracker sealed block-device MicroVM with optional snapshot restore"
+krun\:"libkrun-based MicroVM (reserved\: accepted by the schema, rejected by the compiler until a launcher is selected)"))' \
+'--vm-vcpus=[Guest vCPUs (1-32)]:VM_VCPUS:_default' \
+'--vm-memory=[Guest memory in MiB (128-65536)]:VM_MEMORY:_default' \
+'--vm-disk-mode=[Guest disk mode (\`virtio-fs-live\`, \`ephemeral-tmpfs\`, \`btrfs-cow-overlay\`, \`snapshot-restore\`)]:VM_DISK_MODE:((virtio-fs-live\:"Live host view exported through virtio-fs (QEMU/krun only; Firecracker has no virtio-fs)"
+ephemeral-tmpfs\:"Read-only base image with a guest RAM (tmpfs) overlay, discarded on exit"
+btrfs-cow-overlay\:"Instant Btrfs reflink clone of an ext4 base image, attached read-write, deleted on exit"
+snapshot-restore\:"Warm memory + device state restore from a named snapshot (Firecracker only)"))' \
+'--vm-kernel=[Guest kernel image (under \`/boot\`, \`/var/lib/cordon/kernels\`, or \`~/.local/share/cordon/kernels\`)]:VM_KERNEL:_files' \
+'--vm-rootfs=[Guest root filesystem image (under \`/var/lib/cordon/images\` or \`~/.local/share/cordon/images\`)]:VM_ROOTFS:_files' \
+'--vm-snapshot=[Named Firecracker snapshot to restore (implies \`--vm-disk-mode snapshot-restore\`)]:VM_SNAPSHOT:_default' \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
-'-h[Print help]' \
-'--help[Print help]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
 '*::argv -- Target command and arguments (optional if `--config` defines `CMD`):_cmdambivalent' \
 && ret=0
 ;;
@@ -372,7 +447,10 @@ _arguments "${_arguments_options[@]}" : \
 '-p+[Workload profile slug]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
 '--profile=[Workload profile slug]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
 '--attach-path=[Binary path to attach the AppArmor profile to]:ATTACH_PATH:_files' \
+'--microvm[Render the Gate 3.5 \`cordon_<slug>_microvm\` variant (grants \`/dev/kvm\`, \`/dev/net/tun\`)]' \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -381,10 +459,74 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '-p+[Workload profile slug]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
 '--profile=[Workload profile slug]:PROFILE:(ai-agent untrusted-code package-build network-audit gui-desktop airgapped)' \
+'--tap-pool=[Number of MicroVM tap slots to provision (1-16)]:TAP_POOL:_default' \
+'--tap-owner-uid=[Owner uid of the persistent taps (defaults to the invoking user)]:TAP_OWNER_UID:_default' \
+'--microvm[Also render the Gate 3.5 MicroVM tap pool (\`tcvm<n>\`, \`10.200.255.0/24\`)]' \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
+;;
+(vm)
+_arguments "${_arguments_options[@]}" : \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
+'-h[Print help]' \
+'--help[Print help]' \
+":: :_cordon__subcmd__vm_commands" \
+"*::: :->vm" \
+&& ret=0
+
+    case $state in
+    (vm)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cordon-vm-command-$line[1]:"
+        case $line[1] in
+            (supervise)
+_arguments "${_arguments_options[@]}" : \
+'--spec-json=[Validated MicroVM spec (JSON)]:SPEC_JSON:_default' \
+'--run-id=[Run identifier]:RUN_ID:_default' \
+'--tap=[Tap selection (\`auto\` or \`none\`)]:TAP:_default' \
+'--forward-env=[Comma-separated environment keys forwarded into the guest]:FORWARD_ENV:_default' \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'*::argv -- Guest command:_default' \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+":: :_cordon__subcmd__vm__subcmd__help_commands" \
+"*::: :->help" \
+&& ret=0
+
+    case $state in
+    (help)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cordon-vm-help-command-$line[1]:"
+        case $line[1] in
+            (supervise)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(help)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
+        esac
+    ;;
+esac
 ;;
 (evaluate-url)
 _arguments "${_arguments_options[@]}" : \
@@ -397,6 +539,8 @@ _arguments "${_arguments_options[@]}" : \
 '-b+[Optional HTTP request body to scan for leaked secrets]:BODY:_default' \
 '--body=[Optional HTTP request body to scan for leaked secrets]:BODY:_default' \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -404,6 +548,8 @@ _arguments "${_arguments_options[@]}" : \
 (doctor)
 _arguments "${_arguments_options[@]}" : \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -413,6 +559,19 @@ _arguments "${_arguments_options[@]}" : \
 '--host=[Bind address]:HOST:_hosts' \
 '--port=[Bind TCP port]:PORT:_default' \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(l7-proxy)
+_arguments "${_arguments_options[@]}" : \
+'--listen=[Listen socket address (\`IP\:PORT\`)]:LISTEN:_default' \
+'--policy-file=[Optional path to the runtime policy JSON file (defaults to \`\$CORDON_POLICY_FILE\` or \`/run/cordon/policy.json\`)]:POLICY_FILE:_files' \
+'--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -425,6 +584,8 @@ _arguments "${_arguments_options[@]}" : \
 '--workspace=[Initial workspace directory]:WORKSPACE:_files -/' \
 '--snapshot[Render a static non-interactive frame snapshot and exit immediately]' \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -434,6 +595,8 @@ _arguments "${_arguments_options[@]}" : \
 '-o+[Optional output file path to write the generated completion script]:OUTPUT:_files' \
 '--output=[Optional output file path to write the generated completion script]:OUTPUT:_files' \
 '--json[Emit machine-parseable JSON to stdout while routing diagnostics to stderr]' \
+'--allow-reserved-env[Permit reserved environment keys (SSL_CERT_FILE, HTTPS_PROXY, LD_PRELOAD, ...) to be set from configs or \`--env\`; overrides are recorded as audited warnings]' \
+'--allow-workspace-plugins[Permit workspace-relative plugin manifests (\`./plugins/*/plugin.toml\`) to be loaded; denied by default so hostile workspaces cannot shadow or extend the plugin catalog]' \
 '-h[Print help]' \
 '--help[Print help]' \
 ':shell -- Target shell (`bash`, `zsh`, `fish`, `elvish`, `powershell`):(bash elvish fish powershell zsh)' \
@@ -535,6 +698,26 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(vm)
+_arguments "${_arguments_options[@]}" : \
+":: :_cordon__subcmd__help__subcmd__vm_commands" \
+"*::: :->vm" \
+&& ret=0
+
+    case $state in
+    (vm)
+        words=($line[1] "${words[@]}")
+        (( CURRENT += 1 ))
+        curcontext="${curcontext%:*:*}:cordon-help-vm-command-$line[1]:"
+        case $line[1] in
+            (supervise)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+        esac
+    ;;
+esac
+;;
 (evaluate-url)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -544,6 +727,10 @@ _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
 (serve)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
+(l7-proxy)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
@@ -583,9 +770,11 @@ _cordon_commands() {
 'inspect-cmd:Compile and inspect the Bubblewrap (\`bwrap\`) and \`ip netns\` launch plan' \
 'render-apparmor:Render the AppArmor 4.0 Mandatory Access Control profile' \
 'render-netns:Render the idempotent \`ip netns\`, \`veth\`, and \`iptables\` provisioning commands' \
+'vm:Gate 3.5 MicroVM operations' \
 'evaluate-url:Evaluate an outbound HTTP/HTTPS request against L7 domain, DoH, and secret rules' \
 'doctor:Verify host kernel LSM capabilities and sandbox toolchain binaries' \
 'serve:Start the \`axum\` HTTP Control Plane and WCAG AA Web Dashboard' \
+'l7-proxy:Start the Gate 4 Layer 7 HTTP/HTTPS Policy Enforcement Proxy (\`cordon-l7.service\`)' \
 'tui:Launch the interactive \`ratatui\` Terminal UI & Sandbox Session Launcher (or \`--snapshot\` for static frame)' \
 'completions:Generate shell completion scripts (\`bash\`, \`zsh\`, \`fish\`)' \
 'help:Print this message or the help of the given subcommand(s)' \
@@ -680,9 +869,11 @@ _cordon__subcmd__help_commands() {
 'inspect-cmd:Compile and inspect the Bubblewrap (\`bwrap\`) and \`ip netns\` launch plan' \
 'render-apparmor:Render the AppArmor 4.0 Mandatory Access Control profile' \
 'render-netns:Render the idempotent \`ip netns\`, \`veth\`, and \`iptables\` provisioning commands' \
+'vm:Gate 3.5 MicroVM operations' \
 'evaluate-url:Evaluate an outbound HTTP/HTTPS request against L7 domain, DoH, and secret rules' \
 'doctor:Verify host kernel LSM capabilities and sandbox toolchain binaries' \
 'serve:Start the \`axum\` HTTP Control Plane and WCAG AA Web Dashboard' \
+'l7-proxy:Start the Gate 4 Layer 7 HTTP/HTTPS Policy Enforcement Proxy (\`cordon-l7.service\`)' \
 'tui:Launch the interactive \`ratatui\` Terminal UI & Sandbox Session Launcher (or \`--snapshot\` for static frame)' \
 'completions:Generate shell completion scripts (\`bash\`, \`zsh\`, \`fish\`)' \
 'help:Print this message or the help of the given subcommand(s)' \
@@ -743,6 +934,11 @@ _cordon__subcmd__help__subcmd__inspect-cmd_commands() {
     local commands; commands=()
     _describe -t commands 'cordon help inspect-cmd commands' commands "$@"
 }
+(( $+functions[_cordon__subcmd__help__subcmd__l7-proxy_commands] )) ||
+_cordon__subcmd__help__subcmd__l7-proxy_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help l7-proxy commands' commands "$@"
+}
 (( $+functions[_cordon__subcmd__help__subcmd__plugin_commands] )) ||
 _cordon__subcmd__help__subcmd__plugin_commands() {
     local commands; commands=(
@@ -801,10 +997,27 @@ _cordon__subcmd__help__subcmd__tui_commands() {
     local commands; commands=()
     _describe -t commands 'cordon help tui commands' commands "$@"
 }
+(( $+functions[_cordon__subcmd__help__subcmd__vm_commands] )) ||
+_cordon__subcmd__help__subcmd__vm_commands() {
+    local commands; commands=(
+'supervise:Internal\: Gate 3.5 supervisor executed inside the Bubblewrap tail of a MicroVM plan' \
+    )
+    _describe -t commands 'cordon help vm commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__help__subcmd__vm__subcmd__supervise_commands] )) ||
+_cordon__subcmd__help__subcmd__vm__subcmd__supervise_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon help vm supervise commands' commands "$@"
+}
 (( $+functions[_cordon__subcmd__inspect-cmd_commands] )) ||
 _cordon__subcmd__inspect-cmd_commands() {
     local commands; commands=()
     _describe -t commands 'cordon inspect-cmd commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__l7-proxy_commands] )) ||
+_cordon__subcmd__l7-proxy_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon l7-proxy commands' commands "$@"
 }
 (( $+functions[_cordon__subcmd__plugin_commands] )) ||
 _cordon__subcmd__plugin_commands() {
@@ -888,6 +1101,37 @@ _cordon__subcmd__shell_commands() {
 _cordon__subcmd__tui_commands() {
     local commands; commands=()
     _describe -t commands 'cordon tui commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__vm_commands] )) ||
+_cordon__subcmd__vm_commands() {
+    local commands; commands=(
+'supervise:Internal\: Gate 3.5 supervisor executed inside the Bubblewrap tail of a MicroVM plan' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cordon vm commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__vm__subcmd__help_commands] )) ||
+_cordon__subcmd__vm__subcmd__help_commands() {
+    local commands; commands=(
+'supervise:Internal\: Gate 3.5 supervisor executed inside the Bubblewrap tail of a MicroVM plan' \
+'help:Print this message or the help of the given subcommand(s)' \
+    )
+    _describe -t commands 'cordon vm help commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__vm__subcmd__help__subcmd__help_commands] )) ||
+_cordon__subcmd__vm__subcmd__help__subcmd__help_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon vm help help commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__vm__subcmd__help__subcmd__supervise_commands] )) ||
+_cordon__subcmd__vm__subcmd__help__subcmd__supervise_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon vm help supervise commands' commands "$@"
+}
+(( $+functions[_cordon__subcmd__vm__subcmd__supervise_commands] )) ||
+_cordon__subcmd__vm__subcmd__supervise_commands() {
+    local commands; commands=()
+    _describe -t commands 'cordon vm supervise commands' commands "$@"
 }
 
 if [ "$funcstack[1]" = "_cordon" ]; then

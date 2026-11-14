@@ -73,13 +73,13 @@ flowchart LR
 Cordon adopts the **PyCentric `pc` CLI** (installed on `PATH`) via [`pc.toml`](pc.toml) and [`Taskfile.yml`](Taskfile.yml):
 
 ```bash
-# Verify developer workstation & polyglot toolchains (Rust, Python, Flutter, go-task)
+# Verify developer workstation & polyglot toolchains (Rust, Flutter, go-task)
 pc doctor
 
 # Build optimized release artifacts
 pc build --release
 
-# Run static analysis (cargo clippy -D warnings, ruff, flutter analyze) and format checks
+# Run static analysis (cargo clippy -D warnings, flutter analyze) and format checks
 pc lint
 pc fmt --check
 
@@ -238,17 +238,16 @@ cordon completions bash --output ~/.local/share/bash-completion/completions/cord
 - [`src/sandbox.rs`](src/sandbox.rs): 5-gate Bubblewrap (`bwrap`) + `ip netns` launch plan compiler, `.git` read-only overlay, `TMPDIR` build scratch, and `cordon doctor` verifier.
 - [`src/apparmor.rs`](src/apparmor.rs): AppArmor 4.0 Mandatory Access Control generator (`abi <abi/4.0>`, `userns,`, `mount,`, capability/ptrace denials, BYOB `/tmp` noexec, credential & self-tampering blocks).
 - [`src/network.rs`](src/network.rs): `ip netns`, `veth`, `route_localnet=1`, TCP 80/443 `REDIRECT`, DNS DNAT to the host-local resolver `10.200.1.1:53` (optional `dnsmasq` query logging), UDP 443 QUIC `icmp-port-unreachable` fallback (RFC 9114), IPv6 bypass disable (`net.ipv6` disable + `ip6tables FORWARD -j DROP`), and fail-closed `FORWARD -j DROP`.
-- [`src/l7_policy.rs`](src/l7_policy.rs): Regex secret-egress scanner, DoH resolver blocker, mutating HTTP verb guard (`UNAUTHORIZED_MUTATING_METHOD`), and domain allowlist evaluator.
+- [`src/l7_policy.rs`](src/l7_policy.rs) & [`src/l7_proxy.rs`](src/l7_proxy.rs): Regex secret-egress scanner with SHA-256 secret fingerprinting (`secret_fingerprint`), DoH resolver blocker, mutating HTTP verb guard (`UNAUTHORIZED_MUTATING_METHOD`), domain allowlist evaluator, runtime policy file loader (`/run/cordon/policy.json`), and headless Gate 4 L7 HTTP/HTTPS enforcement proxy (`cordon l7-proxy`).
 - [`src/api.rs`](src/api.rs) & [`src/dashboard.rs`](src/dashboard.rs): Async `axum` + `tokio` HTTP Control Plane and WCAG 2.1 AA Tri-Theme (`Light` / `Dark` / `High-Contrast` 7:1) Web Dashboard with multi-locale i18n (`en`, `af`, `zu`), 5-gate tablist rail, and 1-click Fogg ($B=MAP$) attack presets.
 - [`src/tui.rs`](src/tui.rs): `ratatui` + `crossterm` terminal telemetry dashboard.
-- [`src/cli.rs`](src/cli.rs) & [`src/main.rs`](src/main.rs): `clap` (`derive`) + `clap_complete` CLI with `-f`/`--config`, `-v`/`--volume`, `--allow-bin`, `--allow-group`, `--mount-group`, `cordon groups`, `cordon plugin`, `cordon config`, rich `bash`/`zsh`/`fish` completions (`render_shell_completions`), and strict `stdout` JSON / `stderr` diagnostic stream separation.
+- [`src/cli.rs`](src/cli.rs) & [`src/main.rs`](src/main.rs): `clap` (`derive`) + `clap_complete` CLI with `-f`/`--config`, `-v`/`--volume`, `--allow-bin`, `--allow-group`, `--mount-group`, `cordon groups`, `cordon plugin`, `cordon config`, `cordon l7-proxy`, rich `bash`/`zsh`/`fish` completions (`render_shell_completions`), and strict `stdout` JSON / `stderr` diagnostic stream separation.
 
 ### 6.2 Configs, Plugins, Packaging, Production Scripts & Multi-Platform Clients
 - [`configs/`](configs): Executable reproducible configs (`Cordonfile.opencode`, `opencode.cordon.toml`, `Cordonfile.antigravity`, `antigravity.cordon.toml`, `Cordonfile.python`, `python-sandbox.cordon.toml`, `package-build.cordon.toml`).
 - [`plugins/`](plugins): Tmux-style Cordon plugin manifests ([`plugins/cordon-fish/plugin.toml`](plugins/cordon-fish/plugin.toml), [`plugins/cordon-hud/plugin.toml`](plugins/cordon-hud/plugin.toml)).
 - [`packaging/`](packaging) & [`scripts/package-dist.sh`](scripts/package-dist.sh): Multi-target `.deb`, `.rpm`, `AppImage`, `Flatpak`, `systemd`, `completions/` (`cordon.bash`, `_cordon`, `cordon.fish`), and tarball distribution pipeline.
-- [`deploy/`](deploy): Production host deployment scripts (`deploy/bin/agent-sandbox`, `deploy/bin/agent-shell`, `deploy/net/setup-sandbox-net.sh`, `deploy/apparmor/usr.local.bin.agent-shell`, [`deploy/mitmproxy/agent_policy_addon.py`](deploy/mitmproxy/agent_policy_addon.py) (mitmproxy L7 policy addon, consolidating with [`src/cordon/mitm_addon.py`](src/cordon/mitm_addon.py)), `deploy/tests/verify_sandbox_tv.sh`). The L7 enforcement plane runs `mitmdump` headless under `systemd` (`cordon-l7.service`) writing `0640` JSONL audit events to `/var/log/cordon/audit.jsonl`.
-- [`src/cordon/`](src/cordon): Python 3.12+ reference control plane, `CordonEnvironmentConfig` parser, and `mitmproxy` policy evaluator. **The Python stack is a reference implementation for dual-stack parity testing; the Rust engine (`src/*.rs`) is authoritative.**
+- [`deploy/`](deploy): Production host deployment scripts (`deploy/bin/agent-sandbox`, `deploy/bin/agent-shell`, `deploy/net/setup-sandbox-net.sh`, `deploy/apparmor/usr.local.bin.agent-shell`, `deploy/tests/verify_sandbox_tv.sh`). The L7 enforcement plane runs `cordon l7-proxy` headless under `systemd` (`cordon-l7.service`) writing `0640` JSONL audit events to `/var/log/cordon/audit.jsonl`.
 - [`flutter_client/`](flutter_client): Multi-platform Flutter companion UI (`Mobile < 600px`, `Tablet 600-840px`, `Desktop > 840px`) with Material 3 Tri-Theme and ARB localization.
 - `docs/newsletter/post-your-ai-agent-runs-as-you.php` (internal (not published) staging artifact for the PyCentric web site): Public-safe web newsletter (problem framing, protection outcomes, exposure self-check). Contains no implementation details; keep it that way.
 

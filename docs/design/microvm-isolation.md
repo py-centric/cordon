@@ -271,7 +271,7 @@ The base (non-VM) profiles gain an explicit `deny /dev/kvm rw,`. The existing `d
 
 **Fast (unit, no KVM):**
 - the full 4 x 4 backend/disk-mode matrix
-- golden wire names, shared with Python
+- golden wire names (`tests/golden/microvm_spec_cases.json`)
 - VM-INV-2 path cases: symlinked parent, `/dev/sda`, `/etc/shadow`, `~/.ssh/x`, `..` traversal, wrong root for kind
 - VM-INV-4 and VM-INV-5 rejections
 - EC-01 binds ordered before the VMM exec
@@ -283,14 +283,14 @@ The base (non-VM) profiles gain an explicit `deny /dev/kvm rw,`. The existing `d
 
 Coverage stays >= 90%, with zero `unwrap_used` / `expect_used`.
 
-**Contract:** byte-for-byte JSON parity between Rust and `src/cordon/` for `/api/v1/compile` across all four backends, the error payloads, and the envelope fixtures.
+**Contract:** deterministic JSON contract across all four backends (`/api/v1/compile`), RFC 7807 error payloads, and envelope fixtures (`tests/golden/microvm_spec_cases.json`).
 
 **Integration (`#[ignore]`, needs `/dev/kvm`, VMM binaries and a provisioned netns):**
 
 | Id | Scenario | Expected |
 |---|---|---|
 | TV-VM-01 | Guest root runs `echo x > $WS/.git/hooks/pre-commit` (qemu-microvm, virtio-fs-live) | `EROFS` |
-| TV-VM-02 | Guest POSTs a synthetic `sk-...` / `github_pat_...` (firecracker, Inspected) | mitmproxy 403 plus an audit event |
+| TV-VM-02 | Guest POSTs a synthetic `sk-...` / `github_pat_...` (firecracker, Inspected) | Gate 4 L7 proxy 403 plus an audit event |
 | TV-VM-03 | Snapshot restore to `ready`; qemu-microvm cold boot | < 35 ms / < 200 ms (benchmark, reported not gated) |
 | TV-VM-04 | Guest raw TCP 9999 egress | dropped (host FORWARD DROP) |
 | TV-VM-05 | Guest UDP 443 (QUIC) | rejected |
@@ -307,7 +307,7 @@ Coverage stays >= 90%, with zero `unwrap_used` / `expect_used`.
 | `cordon-guest-init` with a framed JSON envelope | Command execution and CA/env injection need a defined in-guest agent |
 | `krun` reserved | `krunvm` builds VMs from OCI images; libkrun bundles its kernel and uses TSI networking |
 | Unix-socket control channel, no `vsock_cid` | vhost-vsock CIDs are host-global; Firecracker uses hybrid vsock over a Unix socket anyway |
-| Explicit wire names | `qemu-microvm` / `krun` must match across JSON, TOML, CLI, and the Python reference stack |
+| Explicit wire names | `qemu-microvm` / `krun` must match across JSON, TOML, and CLI |
 | Explicit units (`_mib_s`, `_mbit_s`) | `mbps` is ambiguous between MB/s and Mbit/s |
 | Stdio on the guest console | Interactive TUIs (coding agents) need a terminal |
 | VMGENID, per-run entropy, fresh-boot-only `0600` snapshots | Snapshot clones would otherwise share RNG state and could carry secrets |

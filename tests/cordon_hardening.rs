@@ -297,7 +297,16 @@ fn ch03_reserved_env_allowed_with_explicit_override() {
     let Ok(cfg) = CordonEnvironmentConfig::from_cordonfile_str(cf) else {
         panic!("Cordonfile failed to parse");
     };
-    let result = cfg.compile_plan_with_policy(None, &[], &[], &[], &[], &BTreeMap::new(), true);
+    let empty_env = BTreeMap::new();
+    let result = cfg.compile_plan_with_policy(&cordon::config::PlanCompileOptions {
+        workspace_override: None,
+        cli_command_override: &[],
+        readonly_mounts: &[],
+        writable_mounts: &[],
+        extra_masked_bins: &[],
+        extra_env: &empty_env,
+        allow_reserved_env: true,
+    });
     assert!(
         result.is_ok(),
         "--allow-reserved-env must permit the override: {:?}",
