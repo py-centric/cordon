@@ -1,0 +1,49 @@
+# Cordon Control Plane E2E Contract Suite (.tea)
+# Start server before running: cordon serve --bind 127.0.0.1:8787
+
+# 1. Health & readiness probes
+GET /health from Cordon Control Plane
+Assert status is 200
+
+GET /health/liveness from Cordon Control Plane
+Assert status is 200
+
+GET /health/readiness from Cordon Control Plane
+Assert status is 200
+
+GET /health/dependencies from Cordon Control Plane
+Assert status is 200
+
+# 2. Prometheus metrics
+GET /metrics from Cordon Control Plane
+Assert status is 200
+
+# 3. OpenAPI 3.1.0 specification contract
+GET /openapi.json from Cordon Control Plane
+Assert status is 200
+Assert json $.openapi == "3.1.0"
+
+# 4. Control plane metadata & profiles
+GET /api/v1/meta from Cordon Control Plane
+Assert status is 200
+
+GET /api/v1/profiles from Cordon Control Plane
+Assert status is 200
+
+GET /api/v1/profiles/ai-agent from Cordon Control Plane
+Assert status is 200
+
+GET /api/v1/templates from Cordon Control Plane
+Assert status is 200
+
+# 5. Sandbox compilation & L7 policy evaluation
+POST /api/v1/compile from Cordon Control Plane with {"profile": "ai-agent", "command": ["/bin/true"]}
+Assert status is 200
+
+POST /api/v1/evaluate-l7 from Cordon Control Plane with {"profile": "ai-agent", "url": "https://api.github.com/repos", "method": "GET"}
+Assert status is 200
+
+# 6. RFC 7807 error contract on unknown profile
+GET /api/v1/profiles/does-not-exist from Cordon Control Plane
+Assert status is 404
+Assert json $.status == 404

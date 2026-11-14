@@ -59,10 +59,8 @@ jobs:
       - name: Fetch Rust dependencies
         run: cargo fetch --locked
       - name: cargo llvm-cov (line coverage gate)
-        # Gate is the LOWER of 90 and the currently-measured coverage.
-        # Measured 2026-10-31: 80.31% lines (cargo llvm-cov --summary-only).
-        # Coverage floor rises to 90 after the REPL/TUI test additions land.
-        run: cargo llvm-cov --offline --summary-only --fail-under-lines 80
+        # Gate raised to 90% after Wave 2 REPL/TUI/CLI/API unit test additions.
+        run: cargo llvm-cov --offline --summary-only --fail-under-lines 90
 
   audit:
     name: Dependency audit (cargo deny + cargo audit)
