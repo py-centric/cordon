@@ -5,6 +5,15 @@
 # Compiled local binaries
 /bin/
 
+# Secrets & environment files
+.env
+.env.*
+config/secrets.env
+*.pem
+*.key
+*.p12
+*.keystore
+
 # Python bytecode & tool caches
 __pycache__/
 *.py[cod]
@@ -25,6 +34,15 @@ flutter_client/build/
 flutter_client/.flutter-plugins
 flutter_client/.flutter-plugins-dependencies
 
+# AI agent local scratch & specs
+agent.md
+.agent/
+.agents/
+.claude/
+.cursor/
+.specify/
+.speckit/
+
 # Ephemeral Cordon build scratch & captures
 .cordon-build-tmp/
 .opencode/
@@ -38,4 +56,6 @@ tea.db-wal
 
 # OS & Editor files
 .DS_Store
+Thumbs.db
+desktop.ini
 *.swp
