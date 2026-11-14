@@ -159,3 +159,71 @@ pub fn detect_git_branch(workspace: &Path) -> Option<String> {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::{
+        abbreviate_fish_path, detect_git_branch, load_plugin_manifest, parse_plugin_toml_str,
+        parse_tmux_plugin_directive,
+    };
+
+    #[test]
+    fn parses_plugin_toml_sections_and_loads_bundled_manifest() {
+        let raw = r#"
+            # comment
+            [plugin]
+            name = "test-plug"
+            repo_id = "org/test-plug"
+            version = "1.2.3"
+            description = "Demo"
+
+            [features]
+            fish_autosuggest = true
+            syntax_highlighting = true
+            abbreviate_cwd = true
+            powerline_prompt = true
+            startup_banner = true
+
+            [groups]
+            default_command_groups = ["git", "python-dev"]
+            default_directory_groups = ["workspace"]
+
+            [aliases]
+            gs = "git status"
+        "#;
+        let plugin = parse_plugin_toml_str(raw).unwrap_or_else(|e| panic!("parse failed: {e}"));
+        assert_eq!(plugin.name, "test-plug");
+        assert_eq!(plugin.version, "1.2.3");
+        assert!(plugin.features.fish_autosuggest);
+        assert!(plugin.features.powerline_prompt);
+        assert_eq!(plugin.default_command_groups, vec!["git", "python-dev"]);
+        assert_eq!(
+            plugin.aliases.get("gs").map(String::as_str),
+            Some("git status")
+        );
+
+        let bundled = load_plugin_manifest(Path::new("plugins/cordon-fish/plugin.toml"));
+        assert!(bundled.is_ok());
+    }
+
+    #[test]
+    fn parses_tmux_directives_abbreviates_paths_and_reads_git_branch() {
+        assert_eq!(
+            parse_tmux_plugin_directive("set -g @plugin 'cordon-plugins/cordon-fish'").as_deref(),
+            Some("cordon-plugins/cordon-fish")
+        );
+        assert_eq!(
+            parse_tmux_plugin_directive("set @plugin \"cordon-hud\"").as_deref(),
+            Some("cordon-hud")
+        );
+        assert_eq!(parse_tmux_plugin_directive("set -g status on"), None);
+
+        let abbr = abbreviate_fish_path(Path::new("/tmp/.hidden/projects/cordon"));
+        assert_eq!(abbr, "/t/.h/p/cordon");
+
+        let branch = detect_git_branch(Path::new("."));
+        assert!(branch.is_some());
+    }
+}

@@ -235,3 +235,67 @@ fn classify_argument_token(token: &str) -> &'static str {
     }
     ""
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use super::{complete_line, highlight_repl_line};
+
+    #[test]
+    fn complete_line_handles_builtins_arguments_and_paths() {
+        let custom = vec!["my-custom-cmd".to_owned()];
+        assert_eq!(complete_line("", &custom), None);
+        assert_eq!(
+            complete_line("my-cus", &custom).as_deref(),
+            Some("my-custom-cmd")
+        );
+        assert_eq!(
+            complete_line("use ai-ag", &custom).as_deref(),
+            Some("use ai-agent")
+        );
+        assert_eq!(
+            complete_line("allow-group py", &custom).as_deref(),
+            Some("allow-group python-uv")
+        );
+        assert_eq!(
+            complete_line("plugin en", &custom).as_deref(),
+            Some("plugin enable")
+        );
+        assert_eq!(
+            complete_line("ls con", &custom).as_deref(),
+            Some("ls configs")
+        );
+        assert_eq!(
+            complete_line("net air", &custom).as_deref(),
+            Some("net airgap")
+        );
+        assert!(complete_line("configs/Cordonfile.", &custom).is_some());
+    }
+
+    #[test]
+    fn highlight_repl_line_styles_comments_commands_flags_and_ghosts() {
+        let mut valid = BTreeSet::new();
+        valid.insert("use".to_owned());
+        valid.insert("ls".to_owned());
+
+        assert!(highlight_repl_line("# comment", None, &valid).contains("\x1b[90m"));
+        let styled = highlight_repl_line(
+            "use ai-agent --dry-run \"hello\" configs/Cordonfile.python",
+            Some(" --help"),
+            &valid,
+        );
+        assert!(styled.contains("ai-agent"));
+        assert!(styled.contains("--help"));
+        let bad = highlight_repl_line("nonexistent_cmd --flag", None, &valid);
+        assert!(bad.contains("nonexistent_cmd"));
+        assert!(
+            highlight_repl_line("!ls /tmp:ro FOO=bar @plugin", None, &valid).contains("\x1b[1;32m")
+        );
+        assert!(highlight_repl_line("!nonexistent_bin_xyz", None, &valid).contains("\x1b[1;31m"));
+        assert!(highlight_repl_line("./Cargo.toml", None, &valid).contains("\x1b[1;4;32m"));
+        assert!(
+            highlight_repl_line("./nonexistent_cordon_xyz", None, &valid).contains("\x1b[1;31m")
+        );
+    }
+}

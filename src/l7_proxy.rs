@@ -302,4 +302,74 @@ mod tests {
         let serialized = serde_json::to_string(&events[2]).unwrap_or_default();
         assert!(!serialized.contains(secret));
     }
+
+    #[tokio::test]
+    async fn l7_proxy_from_policy_file_and_undecodable_body_fail_closed() {
+        let _default_state = L7ProxyState::from_policy_file(None, false);
+        let mut cfg = PolicyConfig::default();
+        cfg.allowed_domains.push("api.openai.com".to_owned());
+        cfg.inspect_body_secrets = true;
+        let state = L7ProxyState::new(cfg, "test-session-undecodable".to_owned(), false);
+        let _router = build_l7_proxy_router(state.clone());
+
+        let bad_utf8 = Request::builder()
+            .method(Method::POST)
+            .uri("https://api.openai.com/v1/chat/completions")
+            .header("host", "api.openai.com")
+            .header("content-encoding", "gzip")
+            .body(Body::from(vec![0xff, 0xfe, 0xfd]))
+            .unwrap_or_else(|_| panic!("valid request"));
+        let resp = handle_proxied_request(State(state.clone()), bad_utf8).await;
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+        let events = state.recorded_events();
+        assert!(events.iter().any(|e| e.rule_id == RULE_BODY_UNDECODABLE));
+
+        // Relative URI with host header -> https://{host}{path}
+        let rel_req = Request::builder()
+            .method(Method::GET)
+            .uri("/v1/models")
+            .header("host", "api.openai.com")
+            .body(Body::empty())
+            .unwrap_or_else(|_| panic!("valid request"));
+        assert_eq!(
+            handle_proxied_request(State(state.clone()), rel_req)
+                .await
+                .status(),
+            StatusCode::OK
+        );
+
+        // Relative URI without host header -> http://localhost/... -> blocked
+        let no_host_req = Request::builder()
+            .method(Method::GET)
+            .uri("/secret")
+            .body(Body::empty())
+            .unwrap_or_else(|_| panic!("valid request"));
+        assert_eq!(
+            handle_proxied_request(State(state.clone()), no_host_req)
+                .await
+                .status(),
+            StatusCode::FORBIDDEN
+        );
+
+        // Oversized body (> MAX_INSPECTED_BODY_BYTES) -> fail closed
+        let huge_req = Request::builder()
+            .method(Method::POST)
+            .uri("https://api.openai.com/v1/chat/completions")
+            .header("host", "api.openai.com")
+            .body(Body::from(vec![b'a'; MAX_INSPECTED_BODY_BYTES + 64]))
+            .unwrap_or_else(|_| panic!("valid request"));
+        assert_eq!(
+            handle_proxied_request(State(state), huge_req)
+                .await
+                .status(),
+            StatusCode::FORBIDDEN
+        );
+
+        let srv = tokio::spawn(run_l7_proxy_server(
+            SocketAddr::from(([127, 0, 0, 1], 0)),
+            None,
+        ));
+        tokio::task::yield_now().await;
+        srv.abort();
+    }
 }

@@ -212,3 +212,54 @@ fn doctor_reports_confinement_status() {
     );
     assert!(report.checks.iter().any(|c| c.name == "apparmor_aa_exec"));
 }
+
+#[test]
+fn policy_unsafe_writable_paths_and_canonical_resolution() -> anyhow::Result<()> {
+    let tmp = std::env::temp_dir().join(format!("cordon-pol-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&tmp)?;
+    let home = CanonicalPath::resolve(&tmp)?;
+    assert!(is_unsafe_writable_path("/", Some(&home)));
+    assert!(is_unsafe_writable_path("/home", Some(&home)));
+    assert!(is_unsafe_writable_path("/etc/passwd", Some(&home)));
+    assert!(is_unsafe_writable_path(home.as_str(), Some(&home)));
+    let ssh_dir = format!("{}/.ssh", home.as_str());
+    assert!(is_unsafe_writable_path(&ssh_dir, Some(&home)));
+    let safe_ws = format!("{}/project", home.as_str());
+    assert!(!is_unsafe_writable_path(&safe_ws, Some(&home)));
+
+    let ro = vec![tmp.to_string_lossy().into_owned()];
+    let rw = vec![tmp.to_string_lossy().into_owned()];
+    let resolved = resolve_canonical_paths(&tmp, &ro, &rw)?;
+    assert_eq!(resolved.1.len(), 1);
+    assert_eq!(resolved.2.len(), 1);
+    let _ = std::fs::remove_dir_all(&tmp);
+    Ok(())
+}
+
+#[test]
+fn policy_apparmor_helpers_and_socket_masks() -> anyhow::Result<()> {
+    assert_eq!(
+        rendered_apparmor_profile_name("ai-agent"),
+        "cordon_ai_agent"
+    );
+    let _ = loaded_apparmor_profile_names();
+    let _ = apparmor_confinement_target("ai-agent");
+    let _ = aa_exec_confinement_prefix("ai-agent");
+    let _ = aa_exec_microvm_confinement_prefix("ai-agent");
+    let _ = current_xdg_runtime_dir();
+
+    let tmp = std::env::temp_dir().join(format!("cordon-sock-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(tmp.join("keyring"))?;
+    std::fs::write(tmp.join("bus"), b"")?;
+    let mut bwrap = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    super::policy::emit_socket_masks(&mut bwrap, &mut seen, Some(&tmp.to_string_lossy()));
+    assert!(bwrap.iter().any(|a| a == "--ro-bind"));
+    assert!(bwrap.iter().any(|a| a == "--tmpfs"));
+
+    let mut empty = Vec::new();
+    super::policy::emit_socket_masks(&mut empty, &mut seen, None);
+    assert_eq!(empty.len(), 0);
+    let _ = std::fs::remove_dir_all(&tmp);
+    Ok(())
+}

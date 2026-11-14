@@ -380,3 +380,17 @@ pub fn render_tui_snapshot(
     }
     Ok(lines.join("\n"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::render_tui_snapshot;
+    use crate::api::CordonControlPlane;
+
+    #[test]
+    fn render_tui_snapshot_produces_header_and_footer() {
+        let plane = CordonControlPlane::new();
+        let snap = render_tui_snapshot(&plane, 120, 36).unwrap_or_else(|e| panic!("snapshot: {e}"));
+        assert!(snap.contains("Developed by PyCentric"));
+        assert!(snap.contains("Recent Audit Telemetry"));
+    }
+}

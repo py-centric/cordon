@@ -304,3 +304,36 @@ pub fn draw_interactive_tui(frame: &mut Frame<'_>, app: &TuiApp) {
         frame.render_widget(footer, outer[3]);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    use super::draw_interactive_tui;
+    use crate::tui::{TuiApp, TuiPane};
+
+    #[test]
+    fn draw_tui_renders_all_panes_and_input_mode_without_panic() {
+        let mut app = TuiApp::new("ai-agent", Some(PathBuf::from(".")));
+        let backend = TestBackend::new(140, 40);
+        let mut terminal = Terminal::new(backend).unwrap_or_else(|e| panic!("terminal: {e}"));
+
+        for pane in [
+            TuiPane::Profiles,
+            TuiPane::Configs,
+            TuiPane::Groups,
+            TuiPane::Telemetry,
+        ] {
+            app.active_pane = pane;
+            app.input_mode = false;
+            assert!(terminal.draw(|f| draw_interactive_tui(f, &app)).is_ok());
+        }
+
+        app.input_mode = true;
+        app.command_input = "python3 -V".to_owned();
+        assert!(terminal.draw(|f| draw_interactive_tui(f, &app)).is_ok());
+    }
+}

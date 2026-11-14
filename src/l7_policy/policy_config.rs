@@ -241,3 +241,57 @@ pub fn load_policy_file(path: &Path) -> Option<PolicyConfig> {
     let parsed: PolicyConfig = serde_json::from_str(&raw).ok()?;
     Some(parsed.normalized())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
+    use super::{PolicyConfig, load_policy_file, policy_file_is_trusted, write_policy_file};
+    use crate::l7_policy::NetworkMode;
+    use crate::profiles::get_profile;
+
+    #[test]
+    fn policy_config_write_and_load_enforces_mode_trust() {
+        let profile = get_profile("ai-agent").unwrap_or_else(|e| panic!("profile: {e}"));
+        let cfg = PolicyConfig::from_profile(&profile);
+        let round_trip = cfg.to_profile();
+        assert_eq!(round_trip.name, "ai-agent");
+
+        let tmp =
+            std::env::temp_dir().join(format!("cordon-policy-test-{}.json", std::process::id()));
+        write_policy_file(&cfg, &tmp).unwrap_or_else(|e| panic!("write: {e}"));
+        assert!(policy_file_is_trusted(&tmp));
+        assert!(load_policy_file(&tmp).is_some());
+
+        let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o666));
+        assert!(!policy_file_is_trusted(&tmp));
+        assert!(load_policy_file(&tmp).is_none());
+
+        let _ = std::fs::remove_file(&tmp);
+
+        let minimal: PolicyConfig =
+            serde_json::from_str("{}").unwrap_or_else(|e| panic!("deserialize minimal: {e}"));
+        assert_eq!(minimal.profile, "ai-agent");
+        assert!(minimal.strict_whitelist);
+
+        let widened = cfg.with_widened_hosts(&["extra.example.com".to_owned()]);
+        assert!(
+            widened
+                .allowed_domains
+                .contains(&"extra.example.com".to_owned())
+        );
+
+        for (mode, strict, expected) in [
+            ("airgapped", false, NetworkMode::None),
+            ("direct", false, NetworkMode::Direct),
+            ("allowlist_only", false, NetworkMode::AllowlistOnly),
+            ("inspected", true, NetworkMode::AllowlistOnly),
+            ("inspected", false, NetworkMode::Inspected),
+        ] {
+            let mut c = cfg.clone();
+            c.network_mode = mode.to_owned();
+            c.strict_whitelist = strict;
+            assert_eq!(c.to_profile().network_mode, expected);
+        }
+    }
+}

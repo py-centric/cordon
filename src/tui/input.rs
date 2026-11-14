@@ -165,3 +165,95 @@ pub fn handle_tui_key_event(app: &mut TuiApp, key: KeyEvent) {
         _ => {}
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    use super::handle_tui_key_event;
+    use crate::tui::{TuiApp, TuiLaunchAction, TuiPane};
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn navigation_keys_switch_panes_and_move_selection() {
+        let mut app = TuiApp::new("ai-agent", Some(PathBuf::from(".")));
+        assert_eq!(app.active_pane, TuiPane::Profiles);
+
+        handle_tui_key_event(&mut app, key(KeyCode::Tab));
+        assert_eq!(app.active_pane, TuiPane::Configs);
+        handle_tui_key_event(&mut app, key(KeyCode::BackTab));
+        assert_eq!(app.active_pane, TuiPane::Profiles);
+
+        handle_tui_key_event(&mut app, key(KeyCode::Char('j')));
+        assert_eq!(app.selected_profile_idx, 1);
+        handle_tui_key_event(&mut app, key(KeyCode::Char('k')));
+        assert_eq!(app.selected_profile_idx, 0);
+
+        handle_tui_key_event(&mut app, key(KeyCode::Char('2')));
+        assert_eq!(app.active_pane, TuiPane::Configs);
+        handle_tui_key_event(&mut app, key(KeyCode::Down));
+        handle_tui_key_event(&mut app, key(KeyCode::Up));
+
+        handle_tui_key_event(&mut app, key(KeyCode::Char('3')));
+        assert_eq!(app.active_pane, TuiPane::Groups);
+        handle_tui_key_event(&mut app, key(KeyCode::Down));
+        handle_tui_key_event(&mut app, key(KeyCode::Up));
+        handle_tui_key_event(&mut app, key(KeyCode::Char(' ')));
+
+        handle_tui_key_event(&mut app, key(KeyCode::Char('4')));
+        assert_eq!(app.active_pane, TuiPane::Telemetry);
+        handle_tui_key_event(&mut app, key(KeyCode::Down));
+        handle_tui_key_event(&mut app, key(KeyCode::Up));
+    }
+
+    #[test]
+    fn action_keys_and_command_input_mode_work() {
+        let mut app = TuiApp::new("ai-agent", Some(PathBuf::from(".")));
+
+        handle_tui_key_event(&mut app, key(KeyCode::Char('n')));
+        handle_tui_key_event(&mut app, key(KeyCode::Char('n')));
+        handle_tui_key_event(&mut app, key(KeyCode::Char('n')));
+        handle_tui_key_event(&mut app, key(KeyCode::Char('d')));
+        assert!(app.status_message.contains("Host Doctor:"));
+
+        handle_tui_key_event(&mut app, key(KeyCode::Char('s')));
+        assert_eq!(app.pending_launch, Some(TuiLaunchAction::SandboxShell));
+        handle_tui_key_event(&mut app, key(KeyCode::Char('r')));
+        assert_eq!(app.pending_launch, Some(TuiLaunchAction::InteractiveRepl));
+        handle_tui_key_event(&mut app, key(KeyCode::Char('x')));
+        assert_eq!(app.pending_launch, Some(TuiLaunchAction::RunSelectedConfig));
+
+        handle_tui_key_event(&mut app, key(KeyCode::Char(':')));
+        assert!(app.input_mode);
+        handle_tui_key_event(&mut app, key(KeyCode::Char('l')));
+        handle_tui_key_event(&mut app, key(KeyCode::Char('s')));
+        handle_tui_key_event(&mut app, key(KeyCode::Backspace));
+        handle_tui_key_event(&mut app, key(KeyCode::Char('s')));
+        handle_tui_key_event(&mut app, key(KeyCode::Enter));
+        assert!(!app.input_mode);
+        assert_eq!(
+            app.pending_launch,
+            Some(TuiLaunchAction::CustomCommand(vec!["ls".to_owned()]))
+        );
+
+        handle_tui_key_event(&mut app, key(KeyCode::Char('c')));
+        handle_tui_key_event(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
+        );
+        assert!(!app.input_mode);
+        assert!(!app.should_quit);
+
+        handle_tui_key_event(&mut app, key(KeyCode::Char('c')));
+        handle_tui_key_event(&mut app, key(KeyCode::Esc));
+        assert!(!app.input_mode);
+
+        handle_tui_key_event(&mut app, key(KeyCode::Char('q')));
+        assert!(app.should_quit);
+    }
+}

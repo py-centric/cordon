@@ -379,4 +379,17 @@ mod tests {
         );
         assert!(vm.contains("  deny capability sys_admin,"));
     }
+
+    #[test]
+    fn apparmor_compiler_trait_and_fail_closed_fallback() -> anyhow::Result<()> {
+        let mut profile = get_profile("airgapped")?;
+        let rendered = AppArmorProfileCompiler.render_apparmor_profile(&profile, "/usr/bin/bwrap");
+        assert!(rendered.contains("profile cordon_airgapped"));
+
+        // Invalid attach_path triggers FAIL_CLOSED_PROFILE in render_apparmor_profile
+        profile.protected_paths.push("/bad\npath".to_owned());
+        let fallback = render_apparmor_profile(&profile, "/usr/bin/bwrap");
+        assert!(fallback.contains("deny /** rwlkmx"));
+        Ok(())
+    }
 }

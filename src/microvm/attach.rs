@@ -270,3 +270,43 @@ pub fn microvm_doctor_checks(find_binary: impl Fn(&str) -> Option<String>) -> Ve
     });
     checks
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::RawMicroVmSpec;
+    use crate::ports::SandboxCompilerPort;
+    use crate::profiles::get_profile;
+    use crate::sandbox::BwrapSandboxCompiler;
+
+    #[test]
+    fn attach_microvm_plan_rejects_malformed_bwrap_tail() -> anyhow::Result<()> {
+        let profile = get_profile("ai-agent")?;
+        let spec = MicroVmSpec::try_from(RawMicroVmSpec {
+            backend: crate::domain::IsolationBackend::Krun,
+            ..RawMicroVmSpec::default()
+        })?;
+        let mut plan = BwrapSandboxCompiler.compile_launch_plan(
+            &profile,
+            std::path::Path::new("."),
+            &["/bin/true".to_owned()],
+            &[],
+            &[],
+        )?;
+        plan.bwrap_argv.retain(|a| a != "--chdir");
+        assert!(attach_microvm_plan(&mut plan, &profile, &spec, "run-1").is_err());
+
+        let mut plan2 = BwrapSandboxCompiler.compile_launch_plan(
+            &profile,
+            std::path::Path::new("."),
+            &["/bin/true".to_owned()],
+            &[],
+            &[],
+        )?;
+        if let Some(pos) = plan2.bwrap_argv.iter().position(|a| a == "--") {
+            plan2.bwrap_argv[pos] = "not-dash".to_owned();
+        }
+        assert!(attach_microvm_plan(&mut plan2, &profile, &spec, "run-2").is_err());
+        Ok(())
+    }
+}

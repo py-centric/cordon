@@ -251,3 +251,58 @@ fn write_vm_cordonfile_directives(out: &mut String, vm: &RawMicroVmSpec) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cordonfile_parses_all_directives_and_roundtrips() {
+        let raw = r#"
+# Comment
+FROM ai-agent
+NAME test-env
+DESCRIPTION "Test environment"
+WORKDIR .
+FS_MODE workspace_ro
+NET_MODE inspected
+PROTECT_GIT true
+ISOLATE_HOME true
+BUILD_SCRATCH false
+MOUNT /tmp:ro
+MOUNT /var/tmp:rw
+VOLUME_RO /etc/ssl
+VOLUME_RW /tmp/out
+MASK_BIN curl
+ALLOW_BIN rg jq
+ALLOW_GROUP coreutils
+MOUNT_GROUP xdg-config:ro
+PLUGIN cordon-hud
+MASK_DIR /home/user/.ssh
+ALLOW_DOMAIN api.openai.com
+ALLOW_POST api.anthropic.com
+DENY_DOMAIN evil.example
+ENV FOO=bar
+VM_BACKEND firecracker
+VM_RESOURCES vcpus=2 memory_mib=512 disk_mode=ephemeral-tmpfs
+VM_RATE_LIMIT disk_iops=100 disk_mib_s=50 net_mbit_s=100
+CMD ["/bin/true"]
+"#;
+        let cfg = CordonEnvironmentConfig::from_cordonfile_str(raw)
+            .unwrap_or_else(|e| panic!("parse cordonfile: {e}"));
+        assert_eq!(cfg.name, "test-env");
+        assert_eq!(cfg.base_profile, "ai-agent");
+        assert_eq!(cfg.protect_git_dir, Some(true));
+        assert_eq!(cfg.isolate_home_tmpfs, Some(true));
+        assert_eq!(cfg.enable_build_scratch, Some(false));
+        let rendered = cfg.to_cordonfile_string();
+        assert!(rendered.contains("FROM ai-agent"));
+        assert!(rendered.contains("test-env"));
+        assert!(rendered.contains("VM_BACKEND"));
+        assert!(rendered.contains("VM_RESOURCES"));
+        assert!(rendered.contains("VM_RATE_LIMIT"));
+
+        assert!(CordonEnvironmentConfig::from_cordonfile_str("FROM").is_err());
+        assert!(CordonEnvironmentConfig::from_cordonfile_str("VM_RESOURCES bad=1").is_err());
+    }
+}

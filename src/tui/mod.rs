@@ -327,3 +327,43 @@ impl TuiApp {
         });
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tui_pane_cycles_and_app_compiles_plan_and_toggles_groups() {
+        assert_eq!(TuiPane::Profiles.next(), TuiPane::Configs);
+        assert_eq!(TuiPane::Configs.next(), TuiPane::Groups);
+        assert_eq!(TuiPane::Groups.next(), TuiPane::Telemetry);
+        assert_eq!(TuiPane::Telemetry.next(), TuiPane::Profiles);
+        assert_eq!(TuiPane::Profiles.prev(), TuiPane::Telemetry);
+        assert_eq!(TuiPane::Telemetry.prev(), TuiPane::Groups);
+        assert_eq!(TuiPane::Groups.prev(), TuiPane::Configs);
+        assert_eq!(TuiPane::Configs.prev(), TuiPane::Profiles);
+
+        let mut app = TuiApp::new("ai-agent", None);
+        assert!(app.active_config_path().is_none());
+        let (_profile, plan) = app
+            .compile_active_plan(&[])
+            .unwrap_or_else(|e| panic!("compile plan: {e}"));
+        assert_ne!(plan.full_argv.len(), 0);
+
+        app.record_event(Verdict::Allow, "test-subject", "unit-test");
+        app.record_event(Verdict::Block, "blocked-subject", "unit-test");
+        app.telemetry_scroll = 999;
+        app.clamp_telemetry_scroll();
+        assert!(app.telemetry_scroll <= app.max_telemetry_scroll());
+
+        // Toggle a command group and a directory group
+        app.selected_group_idx = 0;
+        app.toggle_selected_group();
+        app.toggle_selected_group();
+        if let Some(dir_idx) = app.group_entries.iter().position(|(is_dir, _, _)| *is_dir) {
+            app.selected_group_idx = dir_idx;
+            app.toggle_selected_group();
+            app.toggle_selected_group();
+        }
+    }
+}
