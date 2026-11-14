@@ -8,6 +8,8 @@ mod highlight;
 mod history;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_history;
 mod tty;
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};

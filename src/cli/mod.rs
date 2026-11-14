@@ -4,6 +4,8 @@ mod commands;
 mod dispatch;
 mod plan;
 mod subcommands;
+#[cfg(test)]
+mod tests;
 
 use std::io::Write;
 use std::path::PathBuf;
