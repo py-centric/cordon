@@ -17,8 +17,8 @@ use crate::ports::AuditSinkPort;
 
 use super::middleware::{
     ControlPlaneOptions, RateLimiter, attach_common_headers, auth_middleware,
-    body_limit_middleware, extract_trace_id, host_guard_middleware, problem_response,
-    rate_limit_middleware, security_headers_middleware,
+    body_limit_middleware, extract_trace_id, host_guard_middleware, idempotency_middleware,
+    problem_response, rate_limit_middleware, security_headers_middleware,
 };
 use super::{
     CompileConfigRequest, CompileLaunchRequest, CordonControlPlane, EVALUATE_L7_BODY_LIMIT_BYTES,
@@ -61,6 +61,10 @@ async fn handle_readiness(State(state): State<CordonControlPlane>) -> Json<serde
         "status": "ready",
         "profiles_loaded": h.profiles_count,
     }))
+}
+
+async fn handle_openapi() -> Json<serde_json::Value> {
+    Json(super::openapi::build_openapi_spec())
 }
 
 async fn handle_metrics(State(state): State<CordonControlPlane>) -> impl IntoResponse {
@@ -218,6 +222,7 @@ pub fn build_router_with_options(
         .route("/health/readiness", get(handle_readiness))
         .route("/health/dependencies", get(handle_doctor))
         .route("/metrics", get(handle_metrics))
+        .route("/openapi.json", get(handle_openapi))
         .route("/api/v1/health", get(handle_health))
         .route("/api/v1/meta", get(handle_meta))
         .route("/api/v1/profiles", get(handle_profiles))
@@ -239,6 +244,7 @@ pub fn build_router_with_options(
             rate_limiter,
             rate_limit_middleware,
         ))
+        .layer(axum::middleware::from_fn(idempotency_middleware))
         .layer(axum::middleware::from_fn(body_limit_middleware))
         .layer(axum::middleware::from_fn_with_state(
             options.auth_token,

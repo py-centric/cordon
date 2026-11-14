@@ -284,6 +284,29 @@ pub(super) async fn body_limit_middleware(req: Request, next: Next) -> Response 
     next.run(req).await
 }
 
+/// Validates `Idempotency-Key` when supplied on `POST` requests (1..=128 printable ASCII chars).
+pub(super) async fn idempotency_middleware(req: Request, next: Next) -> Response {
+    if req.method() == Method::POST
+        && let Some(raw) = req.headers().get("Idempotency-Key")
+    {
+        let valid = raw.to_str().is_ok_and(|s| {
+            let trimmed = s.trim();
+            !trimmed.is_empty()
+                && trimmed.len() <= 128
+                && trimmed.bytes().all(|b| b.is_ascii_graphic())
+        });
+        if !valid {
+            return middleware_rejection(
+                StatusCode::BAD_REQUEST,
+                "Bad Request",
+                "Idempotency-Key must be 1..=128 printable ASCII characters",
+                &req,
+            );
+        }
+    }
+    next.run(req).await
+}
+
 /// Enforces the per-remote-addr token-bucket budget on POST routes (429 on exhaustion).
 pub(super) async fn rate_limit_middleware(
     State(limiter): State<Arc<RateLimiter>>,
