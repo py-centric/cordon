@@ -67,36 +67,51 @@ tasks:
   test:integration:
     desc: 'Execute 5-gate sandbox, config, CLI, and API integration tests'
     cmds:
-      - cargo test --test cordon_integration --test cordon_api_and_cli --offline
+      - cargo test --test integration_sandbox_and_l7 --test integration_surface_and_tui --test api_control_plane --test cli_subcommands --test config_and_ports --test microvm_contracts --offline
 
   mock:test-full:
     desc: 'Execute full-stack integration test suite for pc test --mode integration'
     cmds:
-      - cargo test --test cordon_integration --test cordon_api_and_cli --offline
+      - cargo test --test integration_sandbox_and_l7 --test integration_surface_and_tui --test api_control_plane --test cli_subcommands --test config_and_ports --test microvm_contracts --offline
 
   test:contract:
     desc: 'Verify RFC 7807 API contracts, Cordonfile schemas, and deployment script syntax'
     cmds:
-      - cargo test --test cordon_api_and_cli --offline
+      - cargo test --test api_control_plane --test api_security_auth_headers --test api_security_limits --test config_and_ports --test microvm_contracts --offline
       - bash -n deploy/bin/agent-sandbox
       - bash -n deploy/bin/agent-shell
       - bash -n deploy/net/setup-sandbox-net.sh
       - bash -n deploy/tests/verify_sandbox_tv.sh
 
   test:stress:
-    desc: 'Execute ignored-marked sandbox hardening stress checks (tests/cordon_hardening.rs)'
+    desc: 'Execute ignored-marked sandbox hardening stress checks'
     cmds:
-      - cargo test --test cordon_hardening --offline -- --ignored
+      - cargo test --test hardening_paths_and_env --test hardening_isolation_and_plugins --offline -- --ignored
 
   test:coverage:
-    desc: 'Measure LLVM source-based code coverage via cargo-llvm-cov (>= 90% gate)'
+    desc: 'Measure LLVM source-based code & region/branch coverage (>= 90% lines, >= 88% regions)'
     cmds:
-      - LLVM_COV=/usr/sbin/llvm-cov LLVM_PROFDATA=/usr/sbin/llvm-profdata cargo llvm-cov --offline
+      - bash scripts/verify-coverage.sh
 
   cov:
     desc: 'Alias for test:coverage'
     cmds:
-      - LLVM_COV=/usr/sbin/llvm-cov LLVM_PROFDATA=/usr/sbin/llvm-profdata cargo llvm-cov --offline
+      - bash scripts/verify-coverage.sh
+
+  hooks:install:
+    desc: 'Install prek pre-commit and pre-push git hooks'
+    cmds:
+      - prek install --install-hooks
+
+  hooks:pre-commit:
+    desc: 'Run prek pre-commit checks manually'
+    cmds:
+      - prek run --all-files
+
+  hooks:pre-push:
+    desc: 'Run prek pre-push checks manually (tests, dynamic checks, coverage, supply chain)'
+    cmds:
+      - prek run --hook-stage pre-push --all-files
 
   doctor:
     desc: 'Run Cordon host kernel LSM and sandbox toolchain diagnostics'
