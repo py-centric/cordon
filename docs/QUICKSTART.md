@@ -124,6 +124,8 @@ sudo deploy/net/setup-sandbox-net.sh down
 
 ## 6. Where to Go Next
 
-- [`README.md`](../README.md): profiles, `Cordonfile` engine, HTTP control plane API map.
+- [`README.md`](../README.md): profiles, `Cordonfile` engine, HTTP control plane API map (`/openapi.json`, `Idempotency-Key`), and CI gates (`>= 90%` line coverage).
+- [`agents.md`](../agents.md) & [`design.md`](../design.md): architectural invariants, module size budgets (`<= 400` lines), and W3C design tokens ([`tokens/design-tokens.json`](../tokens/design-tokens.json)).
+- [`tests/tea/cordon_api.tea`](../tests/tea/cordon_api.tea) & [`tests/pummel/cordon_load.yaml`](../tests/pummel/cordon_load.yaml): E2E HTTP contract and load-testing suites.
 - [`docs/OPERATIONS_AND_WORKLOAD_GUIDE.md`](OPERATIONS_AND_WORKLOAD_GUIDE.md): workload recipes, packaging, shell completions, L7/DNS/audit operations.
 - [`SECURITY.md`](../SECURITY.md): STRIDE threat model and responsible disclosure.

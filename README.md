@@ -288,12 +288,24 @@ If `AGPL-3.0-only` is blocked by your procurement or distribution policy (for ex
 | `GET` | `/health`, `/api/v1/health` | Service status, version, `governing_adr`, and ring-buffer count |
 | `GET` | `/health/liveness`, `/health/readiness` | Kubernetes / systemd liveness and readiness probes |
 | `GET` | `/metrics` | Prometheus metrics (`cordon_profiles_total`, `cordon_audit_events_buffered`, `cordon_audit_events_blocked_total`) |
+| `GET` | `/openapi.json` | Machine-readable OpenAPI 3.1.0 specification for all Control Plane routes and RFC 7807 error schemas |
 | `GET` | `/api/v1/profiles` | List all 6 universal workload profiles |
 | `GET` | `/api/v1/templates` | List all built-in reproducible `Cordonfile` / `Cordonfile.toml` starter templates |
 | `GET` | `/api/v1/doctor` | 15-point host kernel LSM, sandbox binary, and live gate-confinement diagnostic report (7 toolchain binaries + `kernel_apparmor_lsm` + `apparmor_aa_exec` + `apparmor_confinement` + `kernel_tiocsti_disabled` + non-required MicroVM readiness: `kvm_device_accessible`, `tun_device_accessible`, `microvm_vmm_binaries`, `btrfs_reflink_support`) |
 | `GET` | `/api/v1/apparmor/{profile}` | Render AppArmor 4.0 MAC policy for `{profile}` |
 | `GET` | `/api/v1/network/{profile}` | Render `ip netns` and `iptables` commands for `{profile}` |
 | `GET` | `/api/v1/events?limit=50` | Retrieve recent structured audit telemetry events |
-| `POST` | `/api/v1/compile` | Compile deterministic 5-gate `SandboxLaunchPlan` (`Trace-ID` & `Idempotency-Key` supported) |
+| `POST` | `/api/v1/compile` | Compile deterministic 5-gate `SandboxLaunchPlan` (`Trace-ID` & validated `Idempotency-Key` supported) |
 | `POST` | `/api/v1/compile-config` | Compile deterministic 5-gate `SandboxLaunchPlan` directly from a `Cordonfile`, TOML, or JSON config |
-| `POST` | `/api/v1/evaluate-l7` | Simulate L7 URL/method/payload policy & secret scan (`Trace-ID` & `Idempotency-Key` supported) |
+| `POST` | `/api/v1/evaluate-l7` | Simulate L7 URL/method/payload policy & secret scan (`Trace-ID` & validated `Idempotency-Key` supported) |
+
+---
+
+## 9. Governance, Design Tokens & Verification Contracts
+
+- **Constitutional Governance**: [`agents.md`](agents.md) defines the repository invariants (zero-trust fail-closed defaults, `unwrap_used`/`expect_used` denied, `<= 400`-line source modules, and zero-em-dash typography). [`design.md`](design.md) defines the multi-surface UI/UX specification (Web Dashboard, Ratatui TUI, and Flutter companion).
+- **W3C Design Tokens**: [`tokens/design-tokens.json`](tokens/design-tokens.json) is the single source of truth for PyCentric Midnight Slate / Royal Violet / Emerald / Crimson / Amber semantic tokens, bound into [`flutter_client/lib/src/theme/design_tokens.dart`](flutter_client/lib/src/theme/design_tokens.dart).
+- **API & Idempotency Contracts**: `GET /openapi.json` serves the live OpenAPI 3.1.0 contract. Mutating `POST` endpoints validate `Idempotency-Key` headers (rejecting empty, >128-char, or non-ASCII/control-character keys with RFC 7807 `400 Bad Request`).
+- **Quality & Coverage Gates**: CI enforces `cargo fmt -- --check`, `cargo clippy --all-targets -- -D warnings`, `cargo deny check`, and `cargo llvm-cov --summary-only --fail-under-lines 90`.
+- **E2E & Load Contracts**: [`tests/tea/cordon_api.tea`](tests/tea/cordon_api.tea) (with [`tests/tea/sut.yaml`](tests/tea/sut.yaml)) verifies HTTP endpoints and RFC 7807 errors via Tea; [`tests/pummel/cordon_load.yaml`](tests/pummel/cordon_load.yaml) defines the Pummel/Goose load SLA (`p95 <= 200ms`, `p99 <= 500ms`, `0%` 5xx).
+
