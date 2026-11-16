@@ -37,7 +37,8 @@ flutter_client/.flutter-plugins-dependencies
 # AI agent local scratch & specs
 agent.md
 .agent/
-.agents/
+.agents/*
+!.agents/skills/
 .claude/
 .cursor/
 .specify/
