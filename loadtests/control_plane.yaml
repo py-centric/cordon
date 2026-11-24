@@ -25,6 +25,10 @@ scenarios:
 
 reporting:
   - module: passfail
-    criteria:
-      - "p95 > 100ms, stop as failed"
-      - "failures > 0%, stop as failed"
+    sla:
+      - metric: p95-response-time
+        threshold: 100.0
+        action: stop
+      - metric: fail-rate
+        threshold: 0.0
+        action: stop
