@@ -1,0 +1,59 @@
+#!/usr/bin/env -S cordon run -f
+# Reproducible Cordon TOML Environment for Rust / Cargo Builds & Tests
+# Governing ADRs: ADR-L0-SEC-02, ADR-L0-DX-07
+
+[environment]
+name = "rust-cargo"
+base_profile = "package-build"
+description = "Isolated Rust and Cargo build/test sandbox with crates.io GET-only allowlist"
+workdir = "."
+
+[filesystem]
+readonly_mounts = [
+  "/usr",
+  "/lib",
+  "/lib64",
+  "/bin",
+  "~/.cargo/bin",
+  "~/.rustup"
+]
+writable_mounts = [
+  "~/.cargo/registry",
+  "~/.cargo/git"
+]
+masked_binaries = [
+  "/usr/bin/docker",
+  "/usr/bin/podman",
+  "/usr/bin/ssh",
+  "/usr/bin/scp",
+  "/usr/bin/nc",
+  "/usr/bin/socat"
+]
+masked_dirs = [
+  "~/.ssh",
+  "~/.aws",
+  "~/.gnupg",
+  "~/.kube"
+]
+
+[network]
+allowed_domains = [
+  "crates.io",
+  "static.crates.io",
+  "index.crates.io",
+  "github.com",
+  "objects.githubusercontent.com"
+]
+denied_domains = [
+  "pastebin.com",
+  "transfer.sh",
+  "webhook.site",
+  "ngrok.io"
+]
+
+[env]
+CARGO_TERM_COLOR = "always"
+RUST_BACKTRACE = "1"
+
+[runtime]
+cmd = ["cargo", "test", "--offline"]

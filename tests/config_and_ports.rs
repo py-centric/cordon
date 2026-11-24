@@ -150,9 +150,19 @@ fn test_hexagonal_ports_and_additional_profile_branches() {
 #[test]
 fn test_reproducible_cordonfile_toml_json_and_templates() {
     let templates = list_config_templates();
-    assert_eq!(templates.len(), 4);
+    assert_eq!(templates.len(), 9);
 
-    for slug in ["opencode", "antigravity", "python-sandbox", "package-build"] {
+    for slug in [
+        "opencode",
+        "antigravity",
+        "python-sandbox",
+        "package-build",
+        "rust-cargo",
+        "flutter-dart",
+        "node-vite-react",
+        "webcrawler-untrusted",
+        "tea-pummel-runner",
+    ] {
         let Ok(tpl_cfg) = get_config_template(slug) else {
             panic!("Failed to retrieve template {slug}");
         };

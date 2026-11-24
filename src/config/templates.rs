@@ -47,6 +47,36 @@ pub fn list_config_templates() -> Vec<CordonConfigTemplate> {
             summary: "Reproducible supply-chain build environment (cargo/npm/uv/pip) with GET-only registry allowlist.".to_owned(),
             default_filename: "package-build.cordon.toml".to_owned(),
         },
+        CordonConfigTemplate {
+            slug: "rust-cargo".to_owned(),
+            base_profile: "package-build".to_owned(),
+            summary: "Isolated Rust and Cargo build/test sandbox with crates.io GET-only allowlist.".to_owned(),
+            default_filename: "rust-cargo.cordon.toml".to_owned(),
+        },
+        CordonConfigTemplate {
+            slug: "flutter-dart".to_owned(),
+            base_profile: "package-build".to_owned(),
+            summary: "Isolated Flutter and Dart build/test sandbox with pub.dev GET-only allowlist.".to_owned(),
+            default_filename: "flutter-dart.cordon.toml".to_owned(),
+        },
+        CordonConfigTemplate {
+            slug: "node-vite-react".to_owned(),
+            base_profile: "package-build".to_owned(),
+            summary: "Isolated React 19, Vite, and Tailwind CSS v4 build sandbox with npm registry allowlist.".to_owned(),
+            default_filename: "node-vite-react.cordon.toml".to_owned(),
+        },
+        CordonConfigTemplate {
+            slug: "webcrawler-untrusted".to_owned(),
+            base_profile: "network-audit".to_owned(),
+            summary: "Fail-closed sandbox for WebCrawler and OSINT scraping with RO workspace and L7 DLP.".to_owned(),
+            default_filename: "webcrawler-untrusted.cordon.toml".to_owned(),
+        },
+        CordonConfigTemplate {
+            slug: "tea-pummel-runner".to_owned(),
+            base_profile: "untrusted-code".to_owned(),
+            summary: "Fail-closed Tea and Pummel test runner confined to explicitly allowlisted SUT targets.".to_owned(),
+            default_filename: "tea-pummel-runner.cordon.toml".to_owned(),
+        },
     ]
 }
 
@@ -161,8 +191,119 @@ pub fn get_config_template(slug: &str) -> Result<CordonEnvironmentConfig, Cordon
             command: vec!["cargo".to_owned(), "build".to_owned()],
             ..CordonEnvironmentConfig::default()
         }),
+        "rust-cargo" => {
+            let mut env = BTreeMap::new();
+            env.insert("CARGO_TERM_COLOR".to_owned(), "always".to_owned());
+            Ok(CordonEnvironmentConfig {
+                name: "rust-cargo".to_owned(),
+                base_profile: "package-build".to_owned(),
+                description: Some(
+                    "Isolated Rust and Cargo build/test sandbox with crates.io GET-only allowlist."
+                        .to_owned(),
+                ),
+                workspace: ".".to_owned(),
+                protect_git_dir: Some(true),
+                enable_build_scratch: Some(true),
+                allowed_domains: vec![
+                    "crates.io".to_owned(),
+                    "static.crates.io".to_owned(),
+                    "index.crates.io".to_owned(),
+                ],
+                env,
+                command: vec![
+                    "cargo".to_owned(),
+                    "test".to_owned(),
+                    "--offline".to_owned(),
+                ],
+                ..CordonEnvironmentConfig::default()
+            })
+        }
+        "flutter-dart" => {
+            let mut env = BTreeMap::new();
+            env.insert("FLUTTER_SUPPRESS_ANALYTICS".to_owned(), "true".to_owned());
+            env.insert("DART_SUPPRESS_ANALYTICS".to_owned(), "true".to_owned());
+            Ok(CordonEnvironmentConfig {
+                name: "flutter-dart".to_owned(),
+                base_profile: "package-build".to_owned(),
+                description: Some(
+                    "Isolated Flutter and Dart build/test sandbox with pub.dev GET-only allowlist."
+                        .to_owned(),
+                ),
+                workspace: ".".to_owned(),
+                protect_git_dir: Some(true),
+                enable_build_scratch: Some(true),
+                allowed_domains: vec!["pub.dev".to_owned(), "storage.googleapis.com".to_owned()],
+                env,
+                command: vec!["flutter".to_owned(), "test".to_owned()],
+                ..CordonEnvironmentConfig::default()
+            })
+        }
+        "node-vite-react" => {
+            let mut env = BTreeMap::new();
+            env.insert("NPM_CONFIG_AUDIT".to_owned(), "false".to_owned());
+            env.insert("CI".to_owned(), "true".to_owned());
+            Ok(CordonEnvironmentConfig {
+                name: "node-vite-react".to_owned(),
+                base_profile: "package-build".to_owned(),
+                description: Some(
+                    "Isolated React 19, Vite, and Tailwind CSS v4 build sandbox with npm registry allowlist."
+                        .to_owned(),
+                ),
+                workspace: ".".to_owned(),
+                protect_git_dir: Some(true),
+                enable_build_scratch: Some(true),
+                allowed_domains: vec!["registry.npmjs.org".to_owned()],
+                env,
+                command: vec!["npm".to_owned(), "run".to_owned(), "build".to_owned()],
+                ..CordonEnvironmentConfig::default()
+            })
+        }
+        "webcrawler-untrusted" => {
+            let mut env = BTreeMap::new();
+            env.insert("PYTHONUNBUFFERED".to_owned(), "1".to_owned());
+            Ok(CordonEnvironmentConfig {
+                name: "webcrawler-untrusted".to_owned(),
+                base_profile: "network-audit".to_owned(),
+                description: Some(
+                    "Fail-closed sandbox for WebCrawler and OSINT scraping with RO workspace and L7 DLP."
+                        .to_owned(),
+                ),
+                workspace: ".".to_owned(),
+                protect_git_dir: Some(true),
+                isolate_home_tmpfs: Some(true),
+                allowed_domains: vec!["etenders.gov.za".to_owned(), "example.com".to_owned()],
+                denied_domains: vec![
+                    "169.254.169.254".to_owned(),
+                    "metadata.google.internal".to_owned(),
+                ],
+                env,
+                command: vec!["webcrawler".to_owned(), "--help".to_owned()],
+                ..CordonEnvironmentConfig::default()
+            })
+        }
+        "tea-pummel-runner" => {
+            let mut env = BTreeMap::new();
+            env.insert("TEA_NONINTERACTIVE".to_owned(), "1".to_owned());
+            env.insert("TEA_ALLOW_LOOPBACK".to_owned(), "1".to_owned());
+            Ok(CordonEnvironmentConfig {
+                name: "tea-pummel-runner".to_owned(),
+                base_profile: "untrusted-code".to_owned(),
+                description: Some(
+                    "Fail-closed Tea and Pummel test runner confined to explicitly allowlisted SUT targets."
+                        .to_owned(),
+                ),
+                workspace: ".".to_owned(),
+                protect_git_dir: Some(true),
+                network_mode: Some(crate::domain::NetworkMode::AllowlistOnly),
+                allowed_domains: vec!["localhost".to_owned(), "127.0.0.1".to_owned()],
+                denied_domains: vec!["169.254.169.254".to_owned()],
+                env,
+                command: vec!["tea".to_owned(), "run".to_owned(), "tests/tea/smoke.tea".to_owned()],
+                ..CordonEnvironmentConfig::default()
+            })
+        }
         other => Err(CordonError::InvalidInput(format!(
-            "Unknown config template '{other}'. Available templates: opencode, antigravity, python-sandbox, package-build"
+            "Unknown config template '{other}'. Available templates: opencode, antigravity, python-sandbox, package-build, rust-cargo, flutter-dart, node-vite-react, webcrawler-untrusted, tea-pummel-runner"
         ))),
     }
 }

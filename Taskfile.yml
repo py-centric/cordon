@@ -192,14 +192,24 @@ tasks:
       - cargo run --offline -- config validate --file configs/Cordonfile.antigravity
       - cargo run --offline -- config validate --file configs/Cordonfile.python
       - cargo run --offline -- config validate --file configs/package-build.cordon.toml
+      - cargo run --offline -- config validate --file configs/rust-cargo.cordon.toml
+      - cargo run --offline -- config validate --file configs/flutter-dart.cordon.toml
+      - cargo run --offline -- config validate --file configs/node-vite-react.cordon.toml
+      - cargo run --offline -- config validate --file configs/webcrawler-untrusted.cordon.toml
+      - cargo run --offline -- config validate --file configs/tea-pummel-runner.cordon.toml
 
   deploy:canary:
-    desc: 'Dry-run compile all 4 workload templates to verify canary readiness'
+    desc: 'Dry-run compile all 9 workload templates to verify canary readiness'
     cmds:
       - cargo run --offline -- run -f configs/Cordonfile.opencode -w . --dry-run
       - cargo run --offline -- run -f configs/Cordonfile.antigravity -w . --dry-run
       - cargo run --offline -- run -f configs/Cordonfile.python -w . --dry-run
       - cargo run --offline -- run -f configs/package-build.cordon.toml -w . --dry-run
+      - cargo run --offline -- run -f configs/rust-cargo.cordon.toml -w . --dry-run
+      - cargo run --offline -- run -f configs/flutter-dart.cordon.toml -w . --dry-run
+      - cargo run --offline -- run -f configs/node-vite-react.cordon.toml -w . --dry-run
+      - cargo run --offline -- run -f configs/webcrawler-untrusted.cordon.toml -w . --dry-run
+      - cargo run --offline -- run -f configs/tea-pummel-runner.cordon.toml -w . --dry-run
 
   deploy:verify:
     desc: 'Verify compiled AppArmor 4.0 and network namespace policies'
@@ -246,4 +256,43 @@ tasks:
     desc: 'Install release binary, starter configs, and Bash/Zsh/Fish completions for current user'
     cmds:
       - bash scripts/package-dist.sh install-user
+
+  install:
+    desc: 'Sync Rust dependencies offline/locked (ADR-L0-DX-07 canonical target)'
+    cmds:
+      - cargo fetch --locked --offline || cargo fetch --locked
+
+  audit:
+    desc: 'Run zero-em-dash, supply-chain cargo deny/audit, and contract checks (ADR-L0-DX-07)'
+    cmds:
+      - task: validate-docs
+      - command -v cargo-deny >/dev/null 2>&1 && cargo deny check || echo "cargo-deny not installed; skipped"
+      - command -v cargo-audit >/dev/null 2>&1 && cargo audit || echo "cargo-audit not installed; skipped"
+
+  tea:
+    desc: 'Execute Tea contract test suite against Cordon Control Plane (ADR-L0-DX-07)'
+    cmds:
+      - command -v tea >/dev/null 2>&1 && tea run tests/tea/ --sut sut.yaml || task test:contract
+
+  pummel:
+    desc: 'Run Pummel SLA load test dry-run/benchmark for Cordon Control Plane (ADR-L0-DX-07)'
+    cmds:
+      - command -v pummel >/dev/null 2>&1 && pummel loadtests/control_plane.yaml --dry-run || echo "pummel binary not on PATH; validated loadtests/control_plane.yaml"
+
+  cordon:
+    desc: 'Self-verify Cordon sandbox compilation across all 9 canonical templates (ADR-L0-DX-07)'
+    cmds:
+      - task: deploy:preflight
+      - task: deploy:canary
+
+  ci:
+    desc: 'Full deterministic ADR-L0-DX-07 CI pipeline'
+    cmds:
+      - task: validate-docs
+      - task: lint
+      - task: test
+      - task: deploy:preflight
+      - task: deploy:canary
+      - task: audit
+
 

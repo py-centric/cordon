@@ -1,0 +1,30 @@
+# Pummel SLA Load Test for Cordon Axum Control Plane (:8095)
+execution:
+  - concurrency: 20
+    ramp-up: 5s
+    hold-for: 15s
+    scenario: cordon-control-plane-smoke
+
+scenarios:
+  cordon-control-plane-smoke:
+    requests:
+      - url: "http://127.0.0.1:8095/health"
+        method: GET
+        label: "cordon-health"
+        assert:
+          - subject: status
+            contains:
+              - "200"
+      - url: "http://127.0.0.1:8095/api/v1/profiles"
+        method: GET
+        label: "cordon-profiles"
+        assert:
+          - subject: status
+            contains:
+              - "200"
+
+reporting:
+  - module: passfail
+    criteria:
+      - "p95 > 100ms, stop as failed"
+      - "failures > 0%, stop as failed"

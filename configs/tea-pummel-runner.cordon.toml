@@ -1,0 +1,51 @@
+#!/usr/bin/env -S cordon run -f
+# Reproducible Cordon TOML Environment for Tea E2E & Pummel Load Test Execution
+# Governing ADRs: ADR-L0-SEC-02, ADR-L0-DX-07
+
+[environment]
+name = "tea-pummel-runner"
+base_profile = "package-build"
+description = "Fail-closed Tea and Pummel test runner confined to explicitly allowlisted local/staging SUT targets"
+workdir = "."
+
+[filesystem]
+readonly_mounts = [
+  "/usr",
+  "/lib",
+  "/lib64",
+  "/bin"
+]
+masked_binaries = [
+  "/usr/bin/docker",
+  "/usr/bin/podman",
+  "/usr/bin/ssh",
+  "/usr/bin/scp",
+  "/usr/bin/sudo"
+]
+masked_dirs = [
+  "~/.ssh",
+  "~/.aws",
+  "~/.gnupg",
+  "~/.kube"
+]
+
+[network]
+allowed_domains = [
+  "localhost",
+  "127.0.0.1",
+  "int.pycentric.local",
+  "tst.pycentric.local"
+]
+denied_domains = [
+  "169.254.169.254",
+  "metadata.google.internal",
+  "pastebin.com",
+  "webhook.site"
+]
+
+[env]
+TEA_NONINTERACTIVE = "1"
+TEA_ALLOW_LOOPBACK = "1"
+
+[runtime]
+cmd = ["tea", "run", "tests/tea/smoke.tea"]

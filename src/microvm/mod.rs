@@ -8,6 +8,7 @@
 mod attach;
 #[cfg(test)]
 mod attach_tests;
+pub mod escalation;
 #[cfg(test)]
 mod tests;
 
@@ -16,6 +17,10 @@ use std::fmt::Write as _;
 use serde_json::json;
 
 pub use attach::{attach_microvm_plan, filesystem_type_of, microvm_doctor_checks};
+pub use escalation::{
+    PcSandboxdEscalationPlan, SandboxdRuntime, build_sandboxd_escalation_plan,
+    requires_sandboxd_escalation,
+};
 
 use crate::domain::{
     FirecrackerApiCall, GuestExecEnvelope, GuestNetConfig, IsolationBackend, MicroVmCompileContext,

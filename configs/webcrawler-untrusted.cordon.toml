@@ -1,0 +1,53 @@
+#!/usr/bin/env -S cordon run -f
+# Reproducible Cordon TOML Environment for Untrusted WebCrawler / OSINT Scraping
+# Governing ADRs: ADR-L0-SEC-02, ADR-L0-DX-07
+
+[environment]
+name = "webcrawler-untrusted"
+base_profile = "network-audit"
+description = "Fail-closed sandbox for WebCrawler and OSINT scraping with RO workspace, isolated HOME, and L7 DLP"
+workdir = "."
+
+[filesystem]
+readonly_mounts = [
+  "/usr",
+  "/lib",
+  "/lib64",
+  "/bin"
+]
+masked_binaries = [
+  "/usr/bin/docker",
+  "/usr/bin/podman",
+  "/usr/bin/ssh",
+  "/usr/bin/scp",
+  "/usr/bin/nc",
+  "/usr/bin/sudo"
+]
+masked_dirs = [
+  "~/.ssh",
+  "~/.aws",
+  "~/.gnupg",
+  "~/.kube",
+  "~/.config/gcloud"
+]
+
+[network]
+allowed_domains = [
+  "etenders.gov.za",
+  "ocds-api.etenders.gov.za",
+  "example.com"
+]
+denied_domains = [
+  "169.254.169.254",
+  "metadata.google.internal",
+  "pastebin.com",
+  "webhook.site",
+  "ngrok.io"
+]
+
+[env]
+PYTHONDONTWRITEBYTECODE = "1"
+PYTHONUNBUFFERED = "1"
+
+[runtime]
+cmd = ["webcrawler", "--help"]
