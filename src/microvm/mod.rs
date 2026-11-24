@@ -9,6 +9,7 @@ mod attach;
 #[cfg(test)]
 mod attach_tests;
 pub mod escalation;
+pub mod sandboxd_bridge;
 #[cfg(test)]
 mod tests;
 
@@ -20,6 +21,10 @@ pub use attach::{attach_microvm_plan, filesystem_type_of, microvm_doctor_checks}
 pub use escalation::{
     PcSandboxdEscalationPlan, SandboxdRuntime, build_sandboxd_escalation_plan,
     requires_sandboxd_escalation,
+};
+pub use sandboxd_bridge::{
+    SandboxdAuditEvent, SandboxdDispatchReceipt, build_pc_sandbox_argv, dispatch_to_sandboxd,
+    merge_audit_trail,
 };
 
 use crate::domain::{
