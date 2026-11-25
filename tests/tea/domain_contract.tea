@@ -1,0 +1,10 @@
+# Tea Domain Contract Suite for cordon-public (cordon-control)
+name: cordon-control-domain-contract
+description: Verifies live health and baseline API contract for cordon-public on loopback port 8095
+steps:
+  - name: health-probe
+    http:
+      method: GET
+      url: "http://127.0.0.1:8095/health"
+    expect:
+      status: 200
