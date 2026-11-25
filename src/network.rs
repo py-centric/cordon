@@ -166,6 +166,42 @@ pub fn build_tshark_command(_profile: &CordonProfile, pcap_dir: &str) -> Vec<Str
     ]
 }
 
+/// Builds shell commands writing the effective L7 [`crate::l7_policy::PolicyConfig`] to a
+/// root-owned runtime JSON file (`0644 root:root`) with single-quote shell escaping.
+pub fn build_policy_file_commands(
+    policy: &crate::l7_policy::PolicyConfig,
+    policy_path: &str,
+) -> Vec<String> {
+    let payload = serde_json::to_string_pretty(&policy.clone().normalized()).unwrap_or_default();
+    let escaped = payload.replace('\'', "'\\''");
+    let dir = policy_path
+        .rsplit_once('/')
+        .map_or(
+            "/run/cordon",
+            |(parent, _)| {
+                if parent.is_empty() { "/" } else { parent }
+            },
+        );
+    vec![
+        format!("install -d -m 0755 {dir}"),
+        format!("printf '%s\\n' '{escaped}' > {policy_path}"),
+        format!("chmod 0644 {policy_path}"),
+        format!("chown root:root {policy_path}"),
+    ]
+}
+
+/// Builds the native Rust `cordon l7-proxy` invocation command for Gate 4 (`cordon-l7.service`).
+pub fn build_l7_proxy_command(profile: &CordonProfile, policy_path: &str) -> Vec<String> {
+    vec![
+        "/usr/bin/cordon".to_owned(),
+        "l7-proxy".to_owned(),
+        "--listen".to_owned(),
+        format!("{}:{}", profile.host_veth_ip, profile.mitm_port),
+        "--policy-file".to_owned(),
+        policy_path.to_owned(),
+    ]
+}
+
 /// Default stateless implementation of [`NetnsCompilerPort`].
 #[derive(Debug, Default, Clone, Copy)]
 pub struct NetnsTopologyCompiler;
@@ -254,5 +290,26 @@ mod tests {
                 .count(),
             16
         );
+    }
+
+    #[test]
+    fn mitm_tshark_policy_and_l7_proxy_commands_are_well_formed() {
+        let profile =
+            crate::profiles::get_profile("ai-agent").unwrap_or_else(|e| panic!("profile: {e}"));
+        let mitm_dump = build_mitmproxy_command(&profile, "/etc/cordon/addon.py", false);
+        assert_eq!(mitm_dump[0], "mitmdump");
+        let mitm_web = build_mitmproxy_command(&profile, "/etc/cordon/addon.py", true);
+        assert_eq!(mitm_web[0], "mitmweb");
+
+        let tshark = build_tshark_command(&profile, "/var/log/cordon");
+        assert!(tshark.contains(&"/var/log/cordon/cordon-veth-host.pcapng".to_owned()));
+
+        let policy = crate::l7_policy::PolicyConfig::default();
+        let policy_cmds = build_policy_file_commands(&policy, "/run/cordon/policy.json");
+        assert_eq!(policy_cmds.len(), 4);
+        assert!(policy_cmds[0].contains("install -d -m 0755 /run/cordon"));
+
+        let l7_cmd = build_l7_proxy_command(&profile, "/run/cordon/policy.json");
+        assert_eq!(l7_cmd[1], "l7-proxy");
     }
 }

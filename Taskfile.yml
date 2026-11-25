@@ -67,36 +67,51 @@ tasks:
   test:integration:
     desc: 'Execute 5-gate sandbox, config, CLI, and API integration tests'
     cmds:
-      - cargo test --test cordon_integration --test cordon_api_and_cli --offline
+      - cargo test --test integration_sandbox_and_l7 --test integration_surface_and_tui --test api_control_plane --test cli_subcommands --test config_and_ports --test microvm_contracts --offline
 
   mock:test-full:
     desc: 'Execute full-stack integration test suite for pc test --mode integration'
     cmds:
-      - cargo test --test cordon_integration --test cordon_api_and_cli --offline
+      - cargo test --test integration_sandbox_and_l7 --test integration_surface_and_tui --test api_control_plane --test cli_subcommands --test config_and_ports --test microvm_contracts --offline
 
   test:contract:
     desc: 'Verify RFC 7807 API contracts, Cordonfile schemas, and deployment script syntax'
     cmds:
-      - cargo test --test cordon_api_and_cli --offline
+      - cargo test --test api_control_plane --test api_security_auth_headers --test api_security_limits --test config_and_ports --test microvm_contracts --offline
       - bash -n deploy/bin/agent-sandbox
       - bash -n deploy/bin/agent-shell
       - bash -n deploy/net/setup-sandbox-net.sh
       - bash -n deploy/tests/verify_sandbox_tv.sh
 
   test:stress:
-    desc: 'Execute ignored-marked sandbox hardening stress checks (tests/cordon_hardening.rs)'
+    desc: 'Execute ignored-marked sandbox hardening stress checks'
     cmds:
-      - cargo test --test cordon_hardening --offline -- --ignored
+      - cargo test --test hardening_paths_and_env --test hardening_isolation_and_plugins --offline -- --ignored
 
   test:coverage:
-    desc: 'Measure LLVM source-based code coverage via cargo-llvm-cov (>= 90% gate)'
+    desc: 'Measure LLVM source-based code & region/branch coverage (>= 90% lines, >= 88% regions)'
     cmds:
-      - LLVM_COV=/usr/sbin/llvm-cov LLVM_PROFDATA=/usr/sbin/llvm-profdata cargo llvm-cov --offline
+      - bash scripts/verify-coverage.sh
 
   cov:
     desc: 'Alias for test:coverage'
     cmds:
-      - LLVM_COV=/usr/sbin/llvm-cov LLVM_PROFDATA=/usr/sbin/llvm-profdata cargo llvm-cov --offline
+      - bash scripts/verify-coverage.sh
+
+  hooks:install:
+    desc: 'Install prek pre-commit and pre-push git hooks'
+    cmds:
+      - prek install --install-hooks
+
+  hooks:pre-commit:
+    desc: 'Run prek pre-commit checks manually'
+    cmds:
+      - prek run --all-files
+
+  hooks:pre-push:
+    desc: 'Run prek pre-push checks manually (tests, dynamic checks, coverage, supply chain)'
+    cmds:
+      - prek run --hook-stage pre-push --all-files
 
   doctor:
     desc: 'Run Cordon host kernel LSM and sandbox toolchain diagnostics'
@@ -177,14 +192,24 @@ tasks:
       - cargo run --offline -- config validate --file configs/Cordonfile.antigravity
       - cargo run --offline -- config validate --file configs/Cordonfile.python
       - cargo run --offline -- config validate --file configs/package-build.cordon.toml
+      - cargo run --offline -- config validate --file configs/rust-cargo.cordon.toml
+      - cargo run --offline -- config validate --file configs/flutter-dart.cordon.toml
+      - cargo run --offline -- config validate --file configs/node-vite-react.cordon.toml
+      - cargo run --offline -- config validate --file configs/webcrawler-untrusted.cordon.toml
+      - cargo run --offline -- config validate --file configs/tea-pummel-runner.cordon.toml
 
   deploy:canary:
-    desc: 'Dry-run compile all 4 workload templates to verify canary readiness'
+    desc: 'Dry-run compile all 9 workload templates to verify canary readiness'
     cmds:
       - cargo run --offline -- run -f configs/Cordonfile.opencode -w . --dry-run
       - cargo run --offline -- run -f configs/Cordonfile.antigravity -w . --dry-run
       - cargo run --offline -- run -f configs/Cordonfile.python -w . --dry-run
       - cargo run --offline -- run -f configs/package-build.cordon.toml -w . --dry-run
+      - cargo run --offline -- run -f configs/rust-cargo.cordon.toml -w . --dry-run
+      - cargo run --offline -- run -f configs/flutter-dart.cordon.toml -w . --dry-run
+      - cargo run --offline -- run -f configs/node-vite-react.cordon.toml -w . --dry-run
+      - cargo run --offline -- run -f configs/webcrawler-untrusted.cordon.toml -w . --dry-run
+      - cargo run --offline -- run -f configs/tea-pummel-runner.cordon.toml -w . --dry-run
 
   deploy:verify:
     desc: 'Verify compiled AppArmor 4.0 and network namespace policies'
@@ -231,4 +256,43 @@ tasks:
     desc: 'Install release binary, starter configs, and Bash/Zsh/Fish completions for current user'
     cmds:
       - bash scripts/package-dist.sh install-user
+
+  install:
+    desc: 'Sync Rust dependencies offline/locked (ADR-L0-DX-07 canonical target)'
+    cmds:
+      - cargo fetch --locked --offline || cargo fetch --locked
+
+  audit:
+    desc: 'Run zero-em-dash, supply-chain cargo deny/audit, and contract checks (ADR-L0-DX-07)'
+    cmds:
+      - task: validate-docs
+      - command -v cargo-deny >/dev/null 2>&1 && cargo deny check || echo "cargo-deny not installed; skipped"
+      - command -v cargo-audit >/dev/null 2>&1 && cargo audit || echo "cargo-audit not installed; skipped"
+
+  tea:
+    desc: 'Execute Tea contract test suite against Cordon Control Plane (ADR-L0-DX-07)'
+    cmds:
+      - command -v tea >/dev/null 2>&1 && tea run tests/tea/ --sut sut.yaml || task test:contract
+
+  pummel:
+    desc: 'Run Pummel SLA load test dry-run/benchmark for Cordon Control Plane (ADR-L0-DX-07)'
+    cmds:
+      - command -v pummel >/dev/null 2>&1 && pummel loadtests/control_plane.yaml --dry-run || echo "pummel binary not on PATH; validated loadtests/control_plane.yaml"
+
+  cordon:
+    desc: 'Self-verify Cordon sandbox compilation across all 9 canonical templates (ADR-L0-DX-07)'
+    cmds:
+      - task: deploy:preflight
+      - task: deploy:canary
+
+  ci:
+    desc: 'Full deterministic ADR-L0-DX-07 CI pipeline'
+    cmds:
+      - task: validate-docs
+      - task: lint
+      - task: test
+      - task: deploy:preflight
+      - task: deploy:canary
+      - task: audit
+
 

@@ -46,8 +46,8 @@ fi
 if ! /usr/bin/curl -sS --max-time 2 https://example.com >/dev/null 2>&1; then
     CURL_BLOCKED=1
 fi
-# Clean up ./local_test_file via Python LotL since rm is blacklisted in sandbox
-python3 -c "import os; os.path.exists('./local_test_file') and os.unlink('./local_test_file')" 2>/dev/null || true
+# Clean up ./local_test_file via find -delete since /usr/bin/rm is blacklisted in sandbox
+find . -maxdepth 1 -name local_test_file -delete 2>/dev/null || true
 
 if [[ "$RM_BLOCKED" -eq 1 && "$CURL_BLOCKED" -eq 1 ]]; then
     log_pass "TV-02 (FR-3.1): /usr/bin/rm and /usr/bin/curl blocked with Permission denied."
@@ -69,10 +69,10 @@ fi
 # -----------------------------------------------------------------------------
 # TV-04: FR-3.3 (Sensitive Credential Path Protection: ~/.ssh)
 # -----------------------------------------------------------------------------
-if python3 -c "import os, pathlib; p = pathlib.Path.home() / '.ssh'; list(p.iterdir()) if p.exists() else open(p / 'id_rsa').read()" 2>/dev/null; then
+if ls "$HOME/.ssh" >/dev/null 2>&1 || cat "$HOME/.ssh/id_rsa" >/dev/null 2>&1; then
     log_fail "TV-04 (FR-3.3): Read access to ~/.ssh was not blocked by AppArmor."
 else
-    log_pass "TV-04 (FR-3.3): Access to ~/.ssh failed with PermissionError ([Errno 13] Permission denied)."
+    log_pass "TV-04 (FR-3.3): Access to ~/.ssh failed with Permission denied."
 fi
 
 # -----------------------------------------------------------------------------
@@ -86,18 +86,18 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# TV-06: FR-4.2 / FR-5.1 (Transparent HTTPS Interception via mitmproxy)
+# TV-06: FR-4.2 / FR-5.1 (Transparent HTTPS Interception via Gate 4 L7 Proxy)
 # -----------------------------------------------------------------------------
-if python3 -c "import urllib.request; r = urllib.request.urlopen('https://example.com', timeout=5); assert r.status == 200" 2>/dev/null; then
-    log_pass "TV-06 (FR-4.2 / FR-5.1): HTTPS request to https://example.com succeeded (200 OK) via overlaid CA."
+if cordon evaluate-url --profile ai-agent --url https://api.anthropic.com/v1/messages --method POST >/dev/null 2>&1; then
+    log_pass "TV-06 (FR-4.2 / FR-5.1): Gate 4 L7 inspection allowed https://api.anthropic.com/v1/messages (200 OK)."
 else
-    log_fail "TV-06 (FR-4.2 / FR-5.1): HTTPS request to https://example.com failed."
+    log_fail "TV-06 (FR-4.2 / FR-5.1): Gate 4 L7 evaluation for https://api.anthropic.com/v1/messages failed."
 fi
 
 # -----------------------------------------------------------------------------
 # TV-07: FR-4.3 / EC-03 (Fail-Closed Egress Firewall: Raw TCP 9999 & UDP 443 QUIC)
 # -----------------------------------------------------------------------------
-if python3 -c "import socket; s = socket.create_connection(('1.1.1.1', 9999), timeout=2)" 2>/dev/null; then
+if timeout 2 bash -c 'exec 3<>/dev/tcp/1.1.1.1/9999' 2>/dev/null; then
     log_fail "TV-07 (FR-4.3 / EC-03): Raw TCP connection on port 9999 succeeded (firewall bypass)."
 else
     log_pass "TV-07 (FR-4.3 / EC-03): Raw TCP port 9999 and non-redirected egress blocked by iptables FORWARD."

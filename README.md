@@ -4,7 +4,7 @@
 > **Open core model in one line:** the engine is AGPL-3.0-only; supported enterprise packages and internal governance docs are proprietary.
 > **Open core licensing.** The Cordon engine is free and open source software under the **GNU Affero General Public License v3 only** (`AGPL-3.0-only`, see [`LICENSE`](LICENSE)). Internal governance/commercial/legal documents, the PyCentric `pc` orchestrator integration, and PyCentric-branded distribution packages (`pycentric-cordon` `.deb`/`.rpm`/tarball/wheel/Flatpak builds) remain proprietary to PyCentric (Pty) Ltd and are **not** covered by the AGPL grant. See [`NOTICE.md`](NOTICE.md) for the full scope map and [`LICENSE-PYCENTRIC.md`](LICENSE-PYCENTRIC.md) for the proprietary terms. "PyCentric", "Cordon", and `pycentric-cordon` are trade marks of PyCentric (Pty) Ltd; no trade mark rights are granted.
 
-**Security-tool evaluators:** Cordon blocks pre-sandbox interpreter hijacking, unsafe root/`$HOME` read-write mounts, in-workspace `.git` hook tampering, and secret or mutating-verb egress to package registries (details in Key Security Invariants below). Run `cordon doctor` (11-point host attestation report; machine-readable via `cordon --json doctor` or `GET /api/v1/doctor`) and read the [Security Threat Model & Disclosure Policy (`SECURITY.md`)](SECURITY.md).
+**Security-tool evaluators:** Cordon blocks pre-sandbox interpreter hijacking, unsafe root/`$HOME` read-write mounts, in-workspace `.git` hook tampering, and secret or mutating-verb egress to package registries (details in Key Security Invariants below). Run `cordon doctor` (15-point host attestation report; machine-readable via `cordon --json doctor` or `GET /api/v1/doctor`) and read the [Security Threat Model & Disclosure Policy (`SECURITY.md`)](SECURITY.md).
 
 **Cordon: zero-unsafe Rust Linux execution sandbox with a reproducible Cordonfile engine and L3-L7 network inspection (netns, AppArmor, bubblewrap, L7 egress policy, PCAP). AGPL-3.0-only.**  
 *Engineered and Governed by PyCentric (`ADR-L0-SEC-02` | [Operations & Workload Guide](docs/OPERATIONS_AND_WORKLOAD_GUIDE.md))*
@@ -73,13 +73,13 @@ flowchart LR
 Cordon adopts the **PyCentric `pc` CLI** (installed on `PATH`) via [`pc.toml`](pc.toml) and [`Taskfile.yml`](Taskfile.yml):
 
 ```bash
-# Verify developer workstation & polyglot toolchains (Rust, Python, Flutter, go-task)
+# Verify developer workstation & polyglot toolchains (Rust, Flutter, go-task)
 pc doctor
 
 # Build optimized release artifacts
 pc build --release
 
-# Run static analysis (cargo clippy -D warnings, ruff, flutter analyze) and format checks
+# Run static analysis (cargo clippy -D warnings, flutter analyze) and format checks
 pc lint
 pc fmt --check
 
@@ -190,6 +190,21 @@ cordon run --allow-bin bat --allow-bin rg --allow-group search-tools --mount-gro
 
 ---
 
+### 4.5 Optional Gate 3.5: KVM MicroVM Isolation (preview)
+
+For workloads where a host-kernel exploit is in scope (binary detonation, fuzzing, untrusted root), Cordon can run the workload under a dedicated guest kernel. The VMM itself runs **inside** Gates 1-3, so guest traffic still passes through the L7 policy and PCAP gates, and live-workspace guests inherit the read-only `.git` protection. Two engines are planned: QEMU `-M microvm` (live workspace over virtio-fs) and Firecracker (sealed block images, snapshot restore).
+
+This release ships the compile-time plane: validation, `[vm]` / `VM_*` config, `--vm-*` flags, the `vm` field on `POST /api/v1/compile`, AppArmor (`render-apparmor --microvm`) and tap-pool (`render-netns --microvm`) rendering, and doctor probes. Review plans with `--dry-run` or `inspect-cmd`; live MicroVM launch exits with code 69 until the guest agent ships.
+
+```bash
+cordon run --dry-run -p untrusted-code -w /tmp/sample \
+  --vm-backend firecracker \
+  --vm-kernel /var/lib/cordon/kernels/vmlinux-microvm \
+  --vm-rootfs /var/lib/cordon/images/alpine-audit.erofs -- ./sample
+```
+
+Design, threat model, and roadmap: [`docs/design/microvm-isolation.md`](docs/design/microvm-isolation.md).
+
 ## 5. Packaging, Distribution & Shell Completions (`dist/` & `packaging/`)
 
 Cordon ships with a reproducible packaging pipeline ([`scripts/package-dist.sh`](scripts/package-dist.sh) and [`packaging/`](packaging)) supporting standalone Linux tarballs, Debian/Ubuntu `.deb`, Fedora/RHEL `.rpm`, `AppImage`, `Flatpak`, `systemd` service units, and native **Bash**, **Zsh**, and **Fish** shell completions ([`packaging/completions/`](packaging/completions)):
@@ -223,17 +238,16 @@ cordon completions bash --output ~/.local/share/bash-completion/completions/cord
 - [`src/sandbox.rs`](src/sandbox.rs): 5-gate Bubblewrap (`bwrap`) + `ip netns` launch plan compiler, `.git` read-only overlay, `TMPDIR` build scratch, and `cordon doctor` verifier.
 - [`src/apparmor.rs`](src/apparmor.rs): AppArmor 4.0 Mandatory Access Control generator (`abi <abi/4.0>`, `userns,`, `mount,`, capability/ptrace denials, BYOB `/tmp` noexec, credential & self-tampering blocks).
 - [`src/network.rs`](src/network.rs): `ip netns`, `veth`, `route_localnet=1`, TCP 80/443 `REDIRECT`, DNS DNAT to the host-local resolver `10.200.1.1:53` (optional `dnsmasq` query logging), UDP 443 QUIC `icmp-port-unreachable` fallback (RFC 9114), IPv6 bypass disable (`net.ipv6` disable + `ip6tables FORWARD -j DROP`), and fail-closed `FORWARD -j DROP`.
-- [`src/l7_policy.rs`](src/l7_policy.rs): Regex secret-egress scanner, DoH resolver blocker, mutating HTTP verb guard (`UNAUTHORIZED_MUTATING_METHOD`), and domain allowlist evaluator.
+- [`src/l7_policy.rs`](src/l7_policy.rs) & [`src/l7_proxy.rs`](src/l7_proxy.rs): Regex secret-egress scanner with SHA-256 secret fingerprinting (`secret_fingerprint`), DoH resolver blocker, mutating HTTP verb guard (`UNAUTHORIZED_MUTATING_METHOD`), domain allowlist evaluator, runtime policy file loader (`/run/cordon/policy.json`), and headless Gate 4 L7 HTTP/HTTPS enforcement proxy (`cordon l7-proxy`).
 - [`src/api.rs`](src/api.rs) & [`src/dashboard.rs`](src/dashboard.rs): Async `axum` + `tokio` HTTP Control Plane and WCAG 2.1 AA Tri-Theme (`Light` / `Dark` / `High-Contrast` 7:1) Web Dashboard with multi-locale i18n (`en`, `af`, `zu`), 5-gate tablist rail, and 1-click Fogg ($B=MAP$) attack presets.
 - [`src/tui.rs`](src/tui.rs): `ratatui` + `crossterm` terminal telemetry dashboard.
-- [`src/cli.rs`](src/cli.rs) & [`src/main.rs`](src/main.rs): `clap` (`derive`) + `clap_complete` CLI with `-f`/`--config`, `-v`/`--volume`, `--allow-bin`, `--allow-group`, `--mount-group`, `cordon groups`, `cordon plugin`, `cordon config`, rich `bash`/`zsh`/`fish` completions (`render_shell_completions`), and strict `stdout` JSON / `stderr` diagnostic stream separation.
+- [`src/cli.rs`](src/cli.rs) & [`src/main.rs`](src/main.rs): `clap` (`derive`) + `clap_complete` CLI with `-f`/`--config`, `-v`/`--volume`, `--allow-bin`, `--allow-group`, `--mount-group`, `cordon groups`, `cordon plugin`, `cordon config`, `cordon l7-proxy`, rich `bash`/`zsh`/`fish` completions (`render_shell_completions`), and strict `stdout` JSON / `stderr` diagnostic stream separation.
 
 ### 6.2 Configs, Plugins, Packaging, Production Scripts & Multi-Platform Clients
 - [`configs/`](configs): Executable reproducible configs (`Cordonfile.opencode`, `opencode.cordon.toml`, `Cordonfile.antigravity`, `antigravity.cordon.toml`, `Cordonfile.python`, `python-sandbox.cordon.toml`, `package-build.cordon.toml`).
 - [`plugins/`](plugins): Tmux-style Cordon plugin manifests ([`plugins/cordon-fish/plugin.toml`](plugins/cordon-fish/plugin.toml), [`plugins/cordon-hud/plugin.toml`](plugins/cordon-hud/plugin.toml)).
 - [`packaging/`](packaging) & [`scripts/package-dist.sh`](scripts/package-dist.sh): Multi-target `.deb`, `.rpm`, `AppImage`, `Flatpak`, `systemd`, `completions/` (`cordon.bash`, `_cordon`, `cordon.fish`), and tarball distribution pipeline.
-- [`deploy/`](deploy): Production host deployment scripts (`deploy/bin/agent-sandbox`, `deploy/bin/agent-shell`, `deploy/net/setup-sandbox-net.sh`, `deploy/apparmor/usr.local.bin.agent-shell`, [`deploy/mitmproxy/agent_policy_addon.py`](deploy/mitmproxy/agent_policy_addon.py) (mitmproxy L7 policy addon, consolidating with [`src/cordon/mitm_addon.py`](src/cordon/mitm_addon.py)), `deploy/tests/verify_sandbox_tv.sh`). The L7 enforcement plane runs `mitmdump` headless under `systemd` (`cordon-l7.service`) writing `0640` JSONL audit events to `/var/log/cordon/audit.jsonl`.
-- [`src/cordon/`](src/cordon): Python 3.12+ reference control plane, `CordonEnvironmentConfig` parser, and `mitmproxy` policy evaluator. **The Python stack is a reference implementation for dual-stack parity testing; the Rust engine (`src/*.rs`) is authoritative.**
+- [`deploy/`](deploy): Production host deployment scripts (`deploy/bin/agent-sandbox`, `deploy/bin/agent-shell`, `deploy/net/setup-sandbox-net.sh`, `deploy/apparmor/usr.local.bin.agent-shell`, `deploy/tests/verify_sandbox_tv.sh`). The L7 enforcement plane runs `cordon l7-proxy` headless under `systemd` (`cordon-l7.service`) writing `0640` JSONL audit events to `/var/log/cordon/audit.jsonl`.
 - [`flutter_client/`](flutter_client): Multi-platform Flutter companion UI (`Mobile < 600px`, `Tablet 600-840px`, `Desktop > 840px`) with Material 3 Tri-Theme and ARB localization.
 - `docs/newsletter/post-your-ai-agent-runs-as-you.php` (internal (not published) staging artifact for the PyCentric web site): Public-safe web newsletter (problem framing, protection outcomes, exposure self-check). Contains no implementation details; keep it that way.
 
@@ -274,12 +288,25 @@ If `AGPL-3.0-only` is blocked by your procurement or distribution policy (for ex
 | `GET` | `/health`, `/api/v1/health` | Service status, version, `governing_adr`, and ring-buffer count |
 | `GET` | `/health/liveness`, `/health/readiness` | Kubernetes / systemd liveness and readiness probes |
 | `GET` | `/metrics` | Prometheus metrics (`cordon_profiles_total`, `cordon_audit_events_buffered`, `cordon_audit_events_blocked_total`) |
+| `GET` | `/openapi.json` | Machine-readable OpenAPI 3.1.0 specification for all Control Plane routes and RFC 7807 error schemas |
 | `GET` | `/api/v1/profiles` | List all 6 universal workload profiles |
 | `GET` | `/api/v1/templates` | List all built-in reproducible `Cordonfile` / `Cordonfile.toml` starter templates |
-| `GET` | `/api/v1/doctor` | 11-point host kernel LSM, sandbox binary, and live gate-confinement diagnostic report (7 toolchain binaries + `kernel_apparmor_lsm` + `apparmor_aa_exec` + `apparmor_confinement` + `kernel_tiocsti_disabled`) |
+| `GET` | `/api/v1/doctor` | 15-point host kernel LSM, sandbox binary, and live gate-confinement diagnostic report (7 toolchain binaries + `kernel_apparmor_lsm` + `apparmor_aa_exec` + `apparmor_confinement` + `kernel_tiocsti_disabled` + non-required MicroVM readiness: `kvm_device_accessible`, `tun_device_accessible`, `microvm_vmm_binaries`, `btrfs_reflink_support`) |
 | `GET` | `/api/v1/apparmor/{profile}` | Render AppArmor 4.0 MAC policy for `{profile}` |
 | `GET` | `/api/v1/network/{profile}` | Render `ip netns` and `iptables` commands for `{profile}` |
 | `GET` | `/api/v1/events?limit=50` | Retrieve recent structured audit telemetry events |
-| `POST` | `/api/v1/compile` | Compile deterministic 5-gate `SandboxLaunchPlan` (`Trace-ID` & `Idempotency-Key` supported) |
+| `POST` | `/api/v1/compile` | Compile deterministic 5-gate `SandboxLaunchPlan` (`Trace-ID` & validated `Idempotency-Key` supported) |
 | `POST` | `/api/v1/compile-config` | Compile deterministic 5-gate `SandboxLaunchPlan` directly from a `Cordonfile`, TOML, or JSON config |
-| `POST` | `/api/v1/evaluate-l7` | Simulate L7 URL/method/payload policy & secret scan (`Trace-ID` & `Idempotency-Key` supported) |
+| `POST` | `/api/v1/evaluate-l7` | Simulate L7 URL/method/payload policy & secret scan (`Trace-ID` & validated `Idempotency-Key` supported) |
+
+---
+
+## 9. Governance, Design Tokens & Verification Contracts
+
+- **Constitutional Governance**: [`agents.md`](agents.md) defines the repository invariants (zero-trust fail-closed defaults, `unwrap_used`/`expect_used` denied, `<= 400`-line source modules, and zero-em-dash typography). [`design.md`](design.md) defines the multi-surface UI/UX specification (Web Dashboard, Ratatui TUI, and Flutter companion).
+- **W3C Design Tokens**: [`tokens/design-tokens.json`](tokens/design-tokens.json) is the single source of truth for PyCentric Midnight Slate / Royal Violet / Emerald / Crimson / Amber semantic tokens, bound into [`flutter_client/lib/src/theme/design_tokens.dart`](flutter_client/lib/src/theme/design_tokens.dart).
+- **API & Idempotency Contracts**: `GET /openapi.json` serves the live OpenAPI 3.1.0 contract. Mutating `POST` endpoints validate `Idempotency-Key` headers (rejecting empty, >128-char, or non-ASCII/control-character keys with RFC 7807 `400 Bad Request`).
+- **Quality & Coverage Gates**: CI enforces `cargo fmt -- --check`, `cargo clippy --all-targets -- -D warnings`, `cargo deny check`, and `cargo llvm-cov --summary-only --fail-under-lines 90`.
+- **Git Hooks (`prek`)**: [`.pre-commit-config.yaml`](.pre-commit-config.yaml) configures `prek` with `pre-commit` checks (formatting, clippy, unit tests, typography, bundle lint, shell syntax, `<= 400`-line file cap) and `pre-push` checks (full test suite, dynamic debug/overflow analysis, `>= 90%` line & `>= 88%` region/branch coverage via [`scripts/verify-coverage.sh`](scripts/verify-coverage.sh), `cargo deny`, and `cargo audit`). Install with `prek install --install-hooks`.
+- **E2E & Load Contracts**: [`tests/tea/cordon_api.tea`](tests/tea/cordon_api.tea) (with [`tests/tea/sut.yaml`](tests/tea/sut.yaml)) verifies HTTP endpoints and RFC 7807 errors via Tea; [`tests/pummel/cordon_load.yaml`](tests/pummel/cordon_load.yaml) defines the Pummel/Goose load SLA (`p95 <= 200ms`, `p99 <= 500ms`, `0%` 5xx).
+

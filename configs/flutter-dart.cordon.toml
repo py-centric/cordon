@@ -1,0 +1,54 @@
+#!/usr/bin/env -S cordon run -f
+# Reproducible Cordon TOML Environment for Flutter / Dart Builds & Tests
+# Governing ADRs: ADR-L0-SEC-02, ADR-L0-DX-07
+
+[environment]
+name = "flutter-dart"
+base_profile = "package-build"
+description = "Isolated Flutter and Dart build/test sandbox with pub.dev GET-only allowlist"
+workdir = "."
+
+[filesystem]
+readonly_mounts = [
+  "/usr",
+  "/lib",
+  "/lib64",
+  "/bin"
+]
+writable_mounts = [
+  "~/.pub-cache"
+]
+masked_binaries = [
+  "/usr/bin/docker",
+  "/usr/bin/podman",
+  "/usr/bin/ssh",
+  "/usr/bin/scp",
+  "/usr/bin/nc"
+]
+masked_dirs = [
+  "~/.ssh",
+  "~/.aws",
+  "~/.gnupg",
+  "~/.kube"
+]
+
+[network]
+allowed_domains = [
+  "pub.dev",
+  "storage.googleapis.com",
+  "github.com",
+  "objects.githubusercontent.com"
+]
+denied_domains = [
+  "pastebin.com",
+  "transfer.sh",
+  "webhook.site",
+  "ngrok.io"
+]
+
+[env]
+FLUTTER_SUPPRESS_ANALYTICS = "true"
+DART_SUPPRESS_ANALYTICS = "true"
+
+[runtime]
+cmd = ["flutter", "test"]

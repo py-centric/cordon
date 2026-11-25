@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "rules_version": 2,
-  "description": "Golden L7 policy/scanner evasion corpus. Single source of truth for Python (src/cordon/policy_rules.py) and Rust (src/l7_policy.rs) parity. Each case feeds {url, method, headers, payload} through the evaluator; body_encoding describes the wire representation of `payload`: identity = raw text, gzip/deflate = compressed on the wire and content-decoded before scanning, base64 = payload IS base64 text wrapping hidden content (scanner must bounded-decode and rescan), gzip-base64 = gzip(base64 text). Rust receives the decoded payload directly (content decompression is adapter-layer) and must still pass every case.",
+  "description": "Golden L7 policy/scanner evasion corpus for Rust (src/l7_policy.rs). Each case feeds {url, method, headers, payload} through the evaluator; body_encoding describes the wire representation of `payload`: identity = raw text, gzip/deflate = compressed on the wire and content-decoded before scanning, base64 = payload IS base64 text wrapping hidden content (scanner must bounded-decode and rescan), gzip-base64 = gzip(base64 text). Rust receives the decoded payload directly (content decompression is adapter-layer) and must pass every case.",
   "profile": {
     "name": "ai-agent",
     "strict_whitelist": true,

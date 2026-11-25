@@ -12,7 +12,7 @@ SPDX-License-Identifier: `AGPL-3.0-only`. The full text is in [`LICENSE`](LICENS
 
 Covered works (non-exhaustive; the default):
 
-- Engine source: [`src/`](src) (Rust core and the Python mitmproxy L7 policy addon)
+- Engine source: [`src/`](src) (Rust core engine and Gate 4 L7 policy enforcement proxy)
 - Tests and fixtures: [`tests/`](tests), [`deploy/tests/`](deploy/tests)
 - Deployment assets: [`deploy/`](deploy) (AppArmor profiles, netns scripts, sudoers, systemd assets)
 - Packaging definitions: [`packaging/`](packaging), build and release tooling: [`scripts/`](scripts)
@@ -22,9 +22,9 @@ Covered works (non-exhaustive; the default):
   [`CHANGELOG.md`](CHANGELOG.md), [`docs/QUICKSTART.md`](docs/QUICKSTART.md),
   [`docs/OPERATIONS_AND_WORKLOAD_GUIDE.md`](docs/OPERATIONS_AND_WORKLOAD_GUIDE.md)
 - Plugin manifests: [`plugins/`](plugins)
-- Dependency lockfiles: [`Cargo.lock`](Cargo.lock), [`uv.lock`](uv.lock), `flutter_client/pubspec.lock`
+- Dependency lockfiles: [`Cargo.lock`](Cargo.lock), `flutter_client/pubspec.lock`
 - Build and CI metadata: [`Taskfile.yml`](Taskfile.yml), [`Cargo.toml`](Cargo.toml),
-  [`pyproject.toml`](pyproject.toml), [`deny.toml`](deny.toml), [`.github/`](.github)
+  [`deny.toml`](deny.toml), [`.github/`](.github)
 
 Redistributions of covered works must keep the licence texts, this `NOTICE`
 file, and all copyright, attribution, and licence notices intact.
@@ -56,7 +56,7 @@ PyCentric internal and confidential and must never be redistributed:
 
 PyCentric publishes a **supported enterprise distribution** of Cordon as the
 `pycentric-cordon` distribution packages (the `.deb` and `.rpm` packages,
-release tarballs, Python wheels, the `org.pycentric.app` Flatpak and AppImage
+release tarballs, the `org.pycentric.app` Flatpak and AppImage
 builds, and any equivalent branded build, including artifacts staged in
 [`dist/`](dist)). These packages are built, tested, signed, and supported by
 PyCentric as copyright owner and are distributed under the commercial terms in
@@ -86,5 +86,5 @@ endorsement or origin by PyCentric.
 ## 5. Third-party components
 
 Third-party open-source components remain under their own license terms. See
-`deny.toml` for the dependency license policy and `Cargo.lock` / `uv.lock` for
+`deny.toml` for the dependency license policy and `Cargo.lock` for
 the pinned dependency set.

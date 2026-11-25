@@ -1,0 +1,33 @@
+# PyCentric Workspace Configuration (ADR-L0-CLI-01, ADR-L0-DX-07)
+schema_version = "1.0.0"
+
+[project]
+name = "pycentric-cordon"
+version = "1.0.0"
+layer = "layer0_foundations"
+description = "Zero-unsafe Rust Linux execution sandbox with Cordonfile engine and L3-L7 network inspection"
+
+[toolchain]
+rust = ">=1.89"
+cargo = ">=1.89"
+task = ">=3.38.0"
+
+[sandbox]
+profile = "package-build"
+config = "configs/rust-cargo.cordon.toml"
+tier = "tier0"
+
+[tasks]
+install = "install"
+fmt = "fmt"
+lint = "lint"
+"test:fast" = "test:fast"
+test = "test"
+audit = "audit"
+tea = "tea"
+pummel = "pummel"
+cordon = "cordon"
+clean = "clean"
+ci = "ci"
+build = "build"
+docs = "docs:all"

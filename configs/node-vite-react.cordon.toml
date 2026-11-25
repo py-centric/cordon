@@ -1,0 +1,54 @@
+#!/usr/bin/env -S cordon run -f
+# Reproducible Cordon TOML Environment for React 19 / Vite / Node Builds
+# Governing ADRs: ADR-L0-SEC-02, ADR-L0-DX-07, ADR-L1-UI-01
+
+[environment]
+name = "node-vite-react"
+base_profile = "package-build"
+description = "Isolated React 19, Vite, and Tailwind CSS v4 build sandbox with npm registry allowlist"
+workdir = "."
+
+[filesystem]
+readonly_mounts = [
+  "/usr",
+  "/lib",
+  "/lib64",
+  "/bin"
+]
+writable_mounts = [
+  "~/.npm"
+]
+masked_binaries = [
+  "/usr/bin/docker",
+  "/usr/bin/podman",
+  "/usr/bin/ssh",
+  "/usr/bin/scp",
+  "/usr/bin/nc"
+]
+masked_dirs = [
+  "~/.ssh",
+  "~/.aws",
+  "~/.gnupg",
+  "~/.kube"
+]
+
+[network]
+allowed_domains = [
+  "registry.npmjs.org",
+  "github.com",
+  "objects.githubusercontent.com"
+]
+denied_domains = [
+  "pastebin.com",
+  "transfer.sh",
+  "webhook.site",
+  "ngrok.io"
+]
+
+[env]
+NPM_CONFIG_AUDIT = "false"
+NPM_CONFIG_FUND = "false"
+CI = "true"
+
+[runtime]
+cmd = ["npm", "run", "build"]

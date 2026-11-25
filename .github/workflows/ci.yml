@@ -37,20 +37,15 @@ jobs:
           bash scripts/bundle-lint.sh
 
   test:
-    name: Test (Rust engine + Python reference stack)
+    name: Test (Rust engine)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: astral-sh/setup-uv@v5
       - name: Fetch Rust dependencies
         run: cargo fetch --locked
       - name: Rust test suite (offline)
         run: cargo test --offline
-      # Equivalent to `uvx pytest tests/test_cordon.py` with the pyproject
-      # runtime dependencies supplied to the ephemeral uvx environment.
-      - name: Python reference stack tests
-        run: uvx --with pytest --with pydantic --with typer --with rich pytest tests/test_cordon.py
 
   coverage:
     name: Coverage (cargo llvm-cov)
@@ -64,10 +59,8 @@ jobs:
       - name: Fetch Rust dependencies
         run: cargo fetch --locked
       - name: cargo llvm-cov (line coverage gate)
-        # Gate is the LOWER of 90 and the currently-measured coverage.
-        # Measured 2026-10-31: 80.31% lines (cargo llvm-cov --summary-only).
-        # Coverage floor rises to 90 after the REPL/TUI test additions land.
-        run: cargo llvm-cov --offline --summary-only --fail-under-lines 80
+        # Gate raised to 90% after Wave 2 REPL/TUI/CLI/API unit test additions.
+        run: cargo llvm-cov --offline --summary-only --fail-under-lines 90
 
   audit:
     name: Dependency audit (cargo deny + cargo audit)
@@ -98,7 +91,7 @@ jobs:
         run: |
           go install github.com/zricethezav/gitleaks/v8@v8.30.1
           echo "$(go env GOPATH)/bin" >> "${GITHUB_PATH}"
-      - name: gitleaks detect --full-history
+      - name: gitleaks detect (full history)
         run: |
           bash scripts/export-public.sh --write-gitleaks-config > "${RUNNER_TEMP}/gitleaks-allowlist.toml"
-          gitleaks detect --full-history --redact --config "${RUNNER_TEMP}/gitleaks-allowlist.toml"
+          gitleaks detect --redact --config "${RUNNER_TEMP}/gitleaks-allowlist.toml"

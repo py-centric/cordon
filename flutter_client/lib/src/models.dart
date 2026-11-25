@@ -47,6 +47,7 @@ enum EnforcementPlane {
   bwrap('bwrap'),
   apparmor('apparmor'),
   netns('netns'),
+  microvm('microvm'),
   mitmproxy('mitmproxy'),
   tshark('tshark');
 
@@ -59,6 +60,71 @@ enum EnforcementPlane {
   static EnforcementPlane parse(String? raw) => values.firstWhere(
         (value) => value.wire == raw?.trim().toLowerCase(),
         orElse: () => EnforcementPlane.bwrap,
+      );
+}
+
+/// Gate 3.5 hardware / process isolation backend (`IsolationBackend`).
+enum IsolationBackend {
+  nativeBwrap('native-bwrap'),
+  qemuMicrovm('qemu-microvm'),
+  firecracker('firecracker'),
+  krun('krun');
+
+  const IsolationBackend(this.wire);
+
+  final String wire;
+
+  static IsolationBackend parse(String? raw) => values.firstWhere(
+        (value) => value.wire == raw?.trim().toLowerCase(),
+        orElse: () => IsolationBackend.nativeBwrap,
+      );
+}
+
+/// Gate 3.5 guest rootfs and workspace persistence mode (`VmDiskMode`).
+enum VmDiskMode {
+  virtioFsLive('virtio-fs-live'),
+  ephemeralTmpfs('ephemeral-tmpfs'),
+  btrfsCowOverlay('btrfs-cow-overlay'),
+  snapshotRestore('snapshot-restore');
+
+  const VmDiskMode(this.wire);
+
+  final String wire;
+
+  static VmDiskMode parse(String? raw) => values.firstWhere(
+        (value) => value.wire == raw?.trim().toLowerCase(),
+        orElse: () => VmDiskMode.virtioFsLive,
+      );
+}
+
+/// Gate 3.5 MicroVM configuration (`MicroVmSpec`).
+class MicroVmSpec {
+  const MicroVmSpec({
+    required this.backend,
+    required this.vcpus,
+    required this.memoryMib,
+    required this.diskMode,
+    this.kernelImage,
+    this.rootfsImage,
+    this.snapshot,
+  });
+
+  final IsolationBackend backend;
+  final int vcpus;
+  final int memoryMib;
+  final VmDiskMode diskMode;
+  final String? kernelImage;
+  final String? rootfsImage;
+  final String? snapshot;
+
+  factory MicroVmSpec.fromJson(Map<String, dynamic> json) => MicroVmSpec(
+        backend: IsolationBackend.parse(_string(json, 'backend')),
+        vcpus: _int(json, 'vcpus', 2),
+        memoryMib: _int(json, 'memory_mib', 512),
+        diskMode: VmDiskMode.parse(_string(json, 'disk_mode')),
+        kernelImage: json['kernel_image'] as String?,
+        rootfsImage: json['rootfs_image'] as String?,
+        snapshot: json['snapshot'] as String?,
       );
 }
 
@@ -140,6 +206,7 @@ class CordonProfile {
     required this.inspectBodySecrets,
     required this.unsharePid,
     required this.unshareIpc,
+    this.microvm,
   });
 
   final String name;
@@ -158,25 +225,32 @@ class CordonProfile {
   final bool inspectBodySecrets;
   final bool unsharePid;
   final bool unshareIpc;
+  final MicroVmSpec? microvm;
 
-  factory CordonProfile.fromJson(Map<String, dynamic> json) => CordonProfile(
-        name: _string(json, 'name'),
-        kind: _string(json, 'kind'),
-        description: _string(json, 'description'),
-        filesystemMode: _string(json, 'filesystem_mode'),
-        networkMode: _string(json, 'network_mode'),
-        netnsName: _string(json, 'netns_name'),
-        subnetCidr: _string(json, 'subnet_cidr'),
-        mitmPort: _int(json, 'mitm_port'),
-        allowedDomains: _stringList(json, 'allowed_domains'),
-        postAllowedHosts: _stringList(json, 'post_allowed_hosts'),
-        deniedDomains: _stringList(json, 'denied_domains'),
-        protectGitDir: _bool(json, 'protect_git_dir'),
-        blockDoh: _bool(json, 'block_doh'),
-        inspectBodySecrets: _bool(json, 'inspect_body_secrets'),
-        unsharePid: _bool(json, 'unshare_pid'),
-        unshareIpc: _bool(json, 'unshare_ipc'),
-      );
+  factory CordonProfile.fromJson(Map<String, dynamic> json) {
+    final vmRaw = json['microvm'];
+    return CordonProfile(
+      name: _string(json, 'name'),
+      kind: _string(json, 'kind'),
+      description: _string(json, 'description'),
+      filesystemMode: _string(json, 'filesystem_mode'),
+      networkMode: _string(json, 'network_mode'),
+      netnsName: _string(json, 'netns_name'),
+      subnetCidr: _string(json, 'subnet_cidr'),
+      mitmPort: _int(json, 'mitm_port'),
+      allowedDomains: _stringList(json, 'allowed_domains'),
+      postAllowedHosts: _stringList(json, 'post_allowed_hosts'),
+      deniedDomains: _stringList(json, 'denied_domains'),
+      protectGitDir: _bool(json, 'protect_git_dir'),
+      blockDoh: _bool(json, 'block_doh'),
+      inspectBodySecrets: _bool(json, 'inspect_body_secrets'),
+      unsharePid: _bool(json, 'unshare_pid'),
+      unshareIpc: _bool(json, 'unshare_ipc'),
+      microvm: vmRaw is Map<String, dynamic>
+          ? MicroVmSpec.fromJson(vmRaw)
+          : null,
+    );
+  }
 }
 
 /// Layer 7 policy verdict (`PolicyDecision`).
@@ -189,6 +263,7 @@ class PolicyDecision {
     required this.url,
     required this.method,
     required this.evaluationLatencyUs,
+    this.secretFingerprint,
   });
 
   final PolicyVerdict verdict;
@@ -198,6 +273,7 @@ class PolicyDecision {
   final String url;
   final String method;
   final int evaluationLatencyUs;
+  final String? secretFingerprint;
 
   factory PolicyDecision.fromJson(Map<String, dynamic> json) => PolicyDecision(
         verdict: PolicyVerdict.parse(_string(json, 'verdict')),
@@ -207,6 +283,7 @@ class PolicyDecision {
         url: _string(json, 'url'),
         method: _string(json, 'method'),
         evaluationLatencyUs: _int(json, 'evaluation_latency_us'),
+        secretFingerprint: json['secret_fingerprint'] as String?,
       );
 }
 
@@ -244,7 +321,7 @@ class AuditEvent {
       );
 }
 
-/// Deterministic 5-gate execution plan (`SandboxLaunchPlan`).
+/// Deterministic 5-gate / 6-gate execution plan (`SandboxLaunchPlan`).
 class SandboxLaunchPlan {
   const SandboxLaunchPlan({
     required this.profileName,
@@ -256,6 +333,7 @@ class SandboxLaunchPlan {
     required this.gatesApplied,
     required this.networkMode,
     required this.filesystemMode,
+    this.isolationBackend = IsolationBackend.nativeBwrap,
   });
 
   final String profileName;
@@ -267,6 +345,7 @@ class SandboxLaunchPlan {
   final List<String> gatesApplied;
   final String networkMode;
   final String filesystemMode;
+  final IsolationBackend isolationBackend;
 
   factory SandboxLaunchPlan.fromJson(Map<String, dynamic> json) =>
       SandboxLaunchPlan(
@@ -279,5 +358,8 @@ class SandboxLaunchPlan {
         gatesApplied: _stringList(json, 'gates_applied'),
         networkMode: _string(json, 'network_mode'),
         filesystemMode: _string(json, 'filesystem_mode'),
+        isolationBackend: IsolationBackend.parse(
+          json['isolation_backend'] as String?,
+        ),
       );
 }

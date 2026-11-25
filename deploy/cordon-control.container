@@ -1,0 +1,19 @@
+[Unit]
+Description=PyCentric Sovereign Service - cordon-public (cordon-control)
+After=network-online.target
+
+[Container]
+Image=ghcr.io/py-centric/cordon-control:latest
+ContainerName=cordon-control
+PublishPort=127.0.0.1:8095:8095
+Volume=%h/.local/share/cordon-control:/data:Z
+Environment=PORT=8095
+NoNewPrivileges=true
+DropCapability=ALL
+
+[Service]
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=default.target

@@ -4,6 +4,15 @@ All notable changes to **PyCentric Cordon** (`pycentric-cordon`) are documented 
 
 ## [Unreleased] - Remediation Wave (2026-10-31)
 
+### Added
+- Gate 3.5 MicroVM isolation plane, compile-time preview ([`docs/design/microvm-isolation.md`](docs/design/microvm-isolation.md)): `IsolationBackend` (`native-bwrap`, `qemu-microvm`, `firecracker`, `krun` reserved) and `VmDiskMode` with a validated `MicroVmSpec` (backend/disk-mode matrix, resource bounds, allowlisted image roots, no symlinked image paths, engine-aware rate limits with explicit units).
+- `[vm]` / `[vm.rate_limits]` TOML tables and `VM_BACKEND`, `VM_RESOURCES`, `VM_KERNEL`, `VM_ROOTFS`, `VM_SNAPSHOT`, `VM_RATE_LIMIT` Cordonfile directives; `--vm-*` flags on `run` and `inspect-cmd`; optional `vm` object on `POST /api/v1/compile`.
+- Plan compiler for QEMU `-M microvm` and the Firecracker API sequence; the VMM runs inside the Gate 1-3 Bubblewrap tail, `/dev/kvm` and `/dev/net/tun` are bound only for MicroVM plans, and native plan JSON is unchanged.
+- AppArmor `cordon_<slug>_microvm` variant (`render-apparmor --microvm`); native profiles now explicitly deny `/dev/kvm`. Per-netns `tcvm` tap pool on `10.200.255.0/24` (`render-netns --microvm`).
+- `cordon doctor` grows from 11 to 15 checks with non-required MicroVM readiness probes.
+- New errors `IncompatibleVmDiskMode`, `UnsafeMicroVmImage`, `UnsupportedVmOption` (HTTP 422) and `MicroVmUnavailable` (HTTP 503, CLI exit code 69). Live MicroVM launch is refused until the guest agent ships.
+- Python reference parity (`src/cordon/microvm.py`) checked against the shared fixture `tests/golden/microvm_spec_cases.json`.
+
 ### Licensing
 - Open-core relicensing: the Cordon engine source, deployment assets, packaging definitions, Flutter client, tests, and operator documentation are now licensed under `AGPL-3.0-only` (new [`LICENSE`](LICENSE)).
 - Excluded works remain proprietary and confidential under [`LICENSE-PYCENTRIC.md`](LICENSE-PYCENTRIC.md): `AUDIENCE_MANIFEST.md`, `FEASIBILITY_AND_STRATEGY.md`, `docs/legal/`, `docs/adr/`, `docs/governance/`, `docs/newsletter/`, `docs/PRD.md`, `docs/FLUTTER_UI_UX_SIGNOFF.md`, and `pc.toml` (PyCentric `pc` orchestrator integration).

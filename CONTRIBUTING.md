@@ -29,7 +29,6 @@ provides a link and a signing comment on your first PR.
 3. Run the local gates before opening a PR:
    - `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`
    - `cargo test`
-   - `ruff check src tests`, `pytest`
    - `bash scripts/check-emdash.sh` (typography rule: hyphens and colons only,
      no unicode dashes)
 4. Open a pull request with a clear description of the problem and the change.
